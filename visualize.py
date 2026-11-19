@@ -40,8 +40,10 @@ counter-clockwise when seen from above.
 
 CONTROLS (in the browser tab)
 -----------------------------
-    right-drag : rotate view      scroll wheel : zoom
-    shift+drag : pan              buttons/slider under the scene
+Free-flying camera. Full details in camera.py.
+    W/A/S/D move, E/Q up/down, arrows turn, hold left mouse to steer,
+    wheel = fly forward/back, Shift = faster.
+    Under the scene: pause, follow any body, overview, two speed sliders.
 """
 
 import math
@@ -54,6 +56,7 @@ from vpython import (
     color,
     label,
     local_light,
+    menu,
     rate,
     slider,
     sphere,
@@ -62,6 +65,7 @@ from vpython import (
     wtext,
 )
 
+from camera import FlyCamera
 from data_sources import AU, DAY
 
 # ---- drawing scales (change these freely; they don't touch the physics) ---
@@ -112,6 +116,7 @@ class SolarSystemView:
         for body in sim.bodies:
             self._create_sphere(body)
 
+        self.camera = FlyCamera(self.scene)
         self._fit_camera()
         self._build_controls()
 
@@ -156,10 +161,14 @@ class SolarSystemView:
         )
 
     def _fit_camera(self):
-        farthest = max(np.linalg.norm(p) for p in self.sim.positions)
-        self.scene.center = vector(0, 0, 0)
-        self.scene.range = farthest * DISTANCE_SCALE * 1.15
-        self.scene.forward = vector(0, -0.5, -1)  # look down at an angle
+        """Overview: back off along a downward-slanted line until every orbit fits."""
+        farthest = max(np.linalg.norm(p) for p in self.sim.positions) * DISTANCE_SCALE
+        # Distance needed so a circle of that radius fits the view:
+        # half-width = distance * tan(half the field of view)
+        distance = 1.15 * farthest / math.tan(self.scene.fov / 2)
+        direction = vector(0, -0.5, -1).norm()      # looking down at an angle
+        self.camera.set_home(-direction * distance, look_at=vector(0, 0, 0))
+        self.camera.go_home()
 
     def _build_controls(self):
         sc = self.scene
@@ -167,32 +176,52 @@ class SolarSystemView:
         self.date_text = wtext(text="")
         sc.append_to_caption("    ")
         button(text="Pause / Play", bind=self._toggle_pause)
+        sc.append_to_caption("   Follow: ")
+        self.follow_menu = menu(choices=["(free flight)"] + list(self.spheres),
+                                bind=self._choose_follow)
         sc.append_to_caption("  ")
-        button(text="Follow Earth", bind=self._follow_earth)
-        button(text="View whole system", bind=self._follow_none)
-        sc.append_to_caption("\n\nSpeed: ")
+        button(text="Overview", bind=self._go_home)
+
+        sc.append_to_caption("\n\nTime speed:   ")
         # Logarithmic slider: -2..2.5 -> 0.01 .. ~316 days per second
         slider(min=-2, max=2.5, value=math.log10(self.days_per_second),
                length=400, bind=self._set_speed)
         self.speed_text = wtext(text="")
         self._update_speed_text()
+
+        sc.append_to_caption("\nFlight speed: ")
+        # -1..1 -> 0.1x .. 10x the automatic flying speed
+        slider(min=-1, max=1, value=0, length=400, bind=self._set_flight_speed)
+        self.flight_text = wtext(text="  1.0x")
+
+        # Keep every line short. If the page gets wider (or taller) than the
+        # window, the browser ALSO uses the arrow keys / Space to scroll it.
         sc.append_to_caption(
-            "\n\nTip: slow below ~1 day/s and 'Follow Earth' to watch it spin. "
-            "Faster than that, the spin is a blur. Right-drag to rotate, scroll to zoom."
+            "\n\n<b>Fly</b> (click the view first):"
+            "\n  <b>W/S</b> forward/back   <b>A/D</b> left/right   <b>E/Q</b> up/down"
+            "\n  <b>Arrows</b> turn   <b>Hold left mouse</b> steer toward the pointer"
+            "\n  <b>Wheel</b> hop forward/back   <b>Shift</b> 5x faster"
+            "\nSpeed adapts by itself: slow near planets, fast in open space."
+            "\nTo watch Earth spin: Follow Earth, time speed below ~1 day/s."
         )
 
     # ------------------------------------------------------------ controls
     def _toggle_pause(self, _btn):
         self.paused = not self.paused
 
-    def _follow_earth(self, _btn):
-        if "Earth" in self.spheres:
-            self.scene.camera.follow(self.spheres["Earth"])
-            self.scene.range = 2.0
+    def _choose_follow(self, m):
+        if m.index == 0:
+            self.camera.target = None  # stay where you are, stop riding along
+        else:
+            self.camera.follow(self.spheres[m.selected])
 
-    def _follow_none(self, _btn):
-        self.scene.camera.follow(None)
-        self._fit_camera()
+    def _go_home(self, _btn):
+        self.follow_menu.index = 0
+        self.camera.go_home()
+
+    def _set_flight_speed(self, s):
+        self.camera.speed_factor = 10 ** s.value
+        self.flight_text.text = f"  {self.camera.speed_factor:.1f}x"
 
     def _set_speed(self, s):
         self.days_per_second = 10 ** s.value
@@ -238,15 +267,18 @@ class SolarSystemView:
         dt = self.sim.dt
         while True:
             rate(FPS)  # at most FPS frames per second
-            if self.paused:
-                continue
-            # How much simulated time this frame should cover...
-            self.time_debt += self.days_per_second * DAY / FPS
-            # ...in whole physics steps. Any leftover carries to the next
-            # frame, so even very slow speeds (less than one step per frame)
-            # run at the correct average rate.
-            n_steps = int(self.time_debt // dt)
-            self.time_debt -= n_steps * dt
-            if n_steps:
-                self.sim.step(n_steps)
-            self._redraw(n_steps * dt)
+            if not self.paused:
+                # How much simulated time this frame should cover...
+                self.time_debt += self.days_per_second * DAY / FPS
+                # ...in whole physics steps. Any leftover carries to the next
+                # frame, so even very slow speeds (less than one step per frame)
+                # run at the correct average rate.
+                n_steps = int(self.time_debt // dt)
+                self.time_debt -= n_steps * dt
+                if n_steps:
+                    self.sim.step(n_steps)
+                self._redraw(n_steps * dt)
+            # The camera keeps working while paused, so you can fly around a
+            # frozen Solar System. Its clock is REAL time (1/FPS s per frame),
+            # not simulated time.
+            self.camera.update(1.0 / FPS, self.spheres.values())
