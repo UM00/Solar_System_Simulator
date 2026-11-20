@@ -1,0 +1,1080 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Solar System Simulator: The Complete Guide</title>
+<!--
+  SOURCE OF THE PDF GUIDE. Edit this file, then run:  python docs/build_docs.py
+  Placeholders like AUTO:SETTINGS are filled in from the code at build time.
+  When you change the code, update the matching chapter AND the changelog
+  (Appendix C) at the bottom.
+-->
+<style>
+  @page { size: A4; margin: 18mm 17mm 18mm 17mm; }
+  :root {
+    --ink: #1b1f24; --muted: #5a6370; --accent: #1f5fa8; --accent-soft: #e8f0fa;
+    --warn-soft: #fdf3e2; --warn: #a3640b; --ok-soft: #e9f6ee; --ok: #1e7a45;
+    --rule: #d5dbe3; --code-bg: #f4f6f8;
+  }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: Georgia, "Times New Roman", serif; font-size: 10.6pt; line-height: 1.5;
+         color: var(--ink); background: #fff; margin: 0; }
+  h1, h2, h3, h4, .part-label, th, .callout-title, .toc { font-family: "Segoe UI", Arial, sans-serif; }
+  h1 { font-size: 21pt; color: var(--accent); margin: 0 0 4mm; }
+  h2 { font-size: 15pt; color: var(--accent); border-bottom: 1.5px solid var(--rule);
+       padding-bottom: 1.5mm; margin: 9mm 0 3mm; break-after: avoid; }
+  h3 { font-size: 12pt; margin: 6mm 0 2mm; break-after: avoid; }
+  h4 { font-size: 10.6pt; margin: 4mm 0 1mm; break-after: avoid; }
+  p { margin: 0 0 2.6mm; }
+  ul, ol { margin: 0 0 2.6mm; padding-left: 6mm; }
+  li { margin-bottom: 1mm; }
+  code { font-family: Consolas, "Courier New", monospace; font-size: 9.3pt;
+         background: var(--code-bg); padding: 0 1mm; border-radius: 2px; }
+  pre.code { font-family: Consolas, "Courier New", monospace; font-size: 8.8pt; line-height: 1.38;
+             background: var(--code-bg); border-left: 3px solid var(--accent); padding: 2.5mm 3.5mm;
+             white-space: pre-wrap; break-inside: avoid; margin: 0 0 3mm; }
+  pre.code code { background: none; padding: 0; font-size: inherit; }
+  table { border-collapse: collapse; width: 100%; margin: 0 0 3.5mm; font-size: 9.6pt; break-inside: avoid; }
+  th { background: var(--accent-soft); text-align: left; font-size: 9pt; }
+  th, td { border: 1px solid var(--rule); padding: 1.3mm 2mm; vertical-align: top; }
+  table.small { font-size: 8.8pt; width: auto; }
+  .eq { font-family: "Cambria Math", Cambria, Georgia, serif; font-size: 12pt; text-align: center;
+        margin: 2.5mm 0 3.5mm; padding: 2mm; background: #fafbfc; border: 1px solid #eceff3; break-inside: avoid; }
+  .eq .where { display: block; font-size: 9.3pt; color: var(--muted); margin-top: 1mm; font-family: Georgia, serif; }
+  b.v { font-weight: bold; font-style: normal; }
+  .callout { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 2.5mm 4mm;
+             margin: 0 0 3.5mm; break-inside: avoid; }
+  .callout.project { border-color: var(--ok); background: var(--ok-soft); }
+  .callout.warn { border-color: var(--warn); background: var(--warn-soft); }
+  .callout-title { font-weight: 700; font-size: 9.6pt; display: block; margin-bottom: 1mm; }
+  .callout.project .callout-title { color: var(--ok); }
+  .callout.warn .callout-title { color: var(--warn); }
+  figure { margin: 2mm 0 4mm; text-align: center; break-inside: avoid; }
+  figcaption { font-size: 9pt; color: var(--muted); margin-top: 1mm; font-style: italic; }
+  svg text { font-family: "Segoe UI", Arial, sans-serif; }
+  .part { break-before: page; }
+  .part-label { font-size: 10pt; letter-spacing: 0.15em; text-transform: uppercase; color: var(--muted); margin-top: 0; }
+  .cover { height: 250mm; display: flex; flex-direction: column; justify-content: center; }
+  .cover h1 { font-size: 30pt; margin-bottom: 2mm; }
+  .cover .subtitle { font-family: "Segoe UI", Arial, sans-serif; font-size: 13pt; color: var(--muted); margin-bottom: 12mm; }
+  .toc { break-before: page; font-size: 10pt; }
+  .toc ol { list-style: none; padding-left: 0; }
+  .toc li { margin: 0.6mm 0; }
+  .toc .tpart { font-weight: 700; margin-top: 3mm; color: var(--accent); }
+  .toc a { color: var(--ink); text-decoration: none; }
+  .toc .sub { padding-left: 6mm; }
+  .ref { margin: 0 0 1.8mm 0; break-inside: avoid; }
+  .ref .sig { font-size: 8.6pt; background: none; padding: 0; color: var(--accent); }
+  .refdoc { font-size: 9pt; color: var(--muted); padding-left: 4mm; }
+  h3.refmod { border-top: 1px solid var(--rule); padding-top: 2mm; font-family: Consolas, monospace; }
+  .refsummary { font-size: 9.3pt; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }
+  .muted { color: var(--muted); }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<!-- ============================== COVER ============================== -->
+<section class="cover">
+  <div class="part-label">A guide to the project and to the field</div>
+  <h1>Solar System Simulator</h1>
+  <div class="subtitle">The complete guide: physics, numerical methods, NASA data and the code that ties them together</div>
+  <p>This document explains everything in this project: what each file does, the physics behind every
+  line, and why it's built the way it is. It's also a general introduction to how solar system
+  simulators work. You should be able to read it start to finish and then build one of your own.</p>
+  <p><b>Built:</b> 2026-11-20 13:19 &nbsp;·&nbsp; <b>Code version:</b> git commit <code>6cc68fd</code> (plus uncommitted changes)</p><table class='small'><tr><th>File</th><th>Lines</th></tr><tr><td><code>body.py</code></td><td>70</td></tr><tr><td><code>camera.py</code></td><td>262</td></tr><tr><td><code>check_accuracy.py</code></td><td>119</td></tr><tr><td><code>data_sources.py</code></td><td>390</td></tr><tr><td><code>integrator.py</code></td><td>69</td></tr><tr><td><code>main.py</code></td><td>86</td></tr><tr><td><code>nasa_api.py</code></td><td>362</td></tr><tr><td><code>physics.py</code></td><td>148</td></tr><tr><td><code>simulation.py</code></td><td>116</td></tr><tr><td><code>visualize.py</code></td><td>286</td></tr></table>
+  <p class="muted" style="font-size:9pt">The source of this PDF is <code>docs/source/guide.html</code>. Rebuild with
+  <code>python docs/build_docs.py</code>. Appendix A (code reference) and Appendix B (current settings) are generated
+  from the code at build time, so they always match the code.</p>
+</section>
+
+<!-- ============================== CONTENTS ============================== -->
+<nav class="toc">
+  <h1>Contents</h1>
+  <ol>
+    <li class="tpart">Part I: The big picture</li>
+    <li class="sub"><a href="#s1">1. What a solar system simulator is</a></li>
+    <li class="sub"><a href="#s2">2. The four questions every simulator answers</a></li>
+    <li class="sub"><a href="#s3">3. Quick start</a></li>
+    <li class="tpart">Part II: The physics</li>
+    <li class="sub"><a href="#s4">4. Vectors and units</a></li>
+    <li class="sub"><a href="#s5">5. Newton's laws of motion</a></li>
+    <li class="sub"><a href="#s6">6. Newton's law of gravitation</a></li>
+    <li class="sub"><a href="#s7">7. The two-body problem and Kepler's laws</a></li>
+    <li class="sub"><a href="#s8">8. Conservation laws: the simulator's test suite</a></li>
+    <li class="sub"><a href="#s9">9. The N-body problem</a></li>
+    <li class="sub"><a href="#s10">10. Reference frames and time</a></li>
+    <li class="sub"><a href="#s11">11. Spin, axial tilt, seasons and tidal locking</a></li>
+    <li class="sub"><a href="#s12">12. What this model leaves out</a></li>
+    <li class="tpart">Part III: Numerical integration (the "N-body integrator")</li>
+    <li class="sub"><a href="#s13">13. What an integrator is</a></li>
+    <li class="sub"><a href="#s14">14. Forward Euler and why orbits spiral</a></li>
+    <li class="sub"><a href="#s15">15. Velocity Verlet (leapfrog) and symplectic methods</a></li>
+    <li class="sub"><a href="#s16">16. Errors and choosing the time step</a></li>
+    <li class="sub"><a href="#s17">17. Speed: the N² problem</a></li>
+    <li class="sub"><a href="#s18">18. Beyond this project: better integrators</a></li>
+    <li class="tpart">Part IV: Real data from NASA/JPL</li>
+    <li class="sub"><a href="#s19">19. Where the numbers come from</a></li>
+    <li class="sub"><a href="#s20">20. JPL Horizons: positions and velocities</a></li>
+    <li class="sub"><a href="#s21">21. Masses: why we store GM</a></li>
+    <li class="sub"><a href="#s22">22. Moons</a></li>
+    <li class="sub"><a href="#s23">23. Asteroids and comets</a></li>
+    <li class="tpart">Part V: The code, file by file</li>
+    <li class="sub"><a href="#s24">24. Architecture and design principles</a></li>
+    <li class="sub"><a href="#s25">25. The Python and NumPy toolkit</a></li>
+    <li class="sub"><a href="#s26">26. Every file explained</a></li>
+    <li class="sub"><a href="#s27">27. One frame, traced end to end</a></li>
+    <li class="tpart">Part VI: Drawing it: visualization and camera</li>
+    <li class="sub"><a href="#s28">28. The 3D view</a></li>
+    <li class="sub"><a href="#s29">29. The free-flying camera</a></li>
+    <li class="tpart">Part VII: Is it right? Validation</li>
+    <li class="sub"><a href="#s30">30. Testing against reality</a></li>
+    <li class="tpart">Part VIII: Going further</li>
+    <li class="sub"><a href="#s31">31. Extending the project</a></li>
+    <li class="sub"><a href="#s32">32. Troubleshooting</a></li>
+    <li class="sub"><a href="#s33">33. Glossary</a></li>
+    <li class="sub"><a href="#s34">34. Further reading</a></li>
+    <li class="tpart">Appendices</li>
+    <li class="sub"><a href="#appA">A. Code reference (generated from the code)</a></li>
+    <li class="sub"><a href="#appB">B. Current settings (generated from main.py)</a></li>
+    <li class="sub"><a href="#appC">C. Document history</a></li>
+  </ol>
+</nav>
+
+<!-- ============================== PART I ============================== -->
+<section class="part">
+<div class="part-label">Part I</div>
+<h1>The big picture</h1>
+
+<h2 id="s1">1. What a solar system simulator is</h2>
+<p>An <b>animation</b> moves planets along circles that someone drew. A <b>simulator</b> knows only
+the <i>laws of physics</i> and a <i>starting moment</i>, and works out everything else. Nobody tells
+our simulated Earth to go around the Sun. It does so because gravity pulls it and it was already
+moving sideways at 30 km/s. That difference is the point: a simulator can answer questions nobody
+drew the answer to, like <i>"where will Jupiter be in 50 years?"</i>, <i>"what if the Sun were twice as
+heavy?"</i> or <i>"would this asteroid survive near Jupiter?"</i>.</p>
+<p>This project simulates the Sun, the planets, their moons, asteroids and comets. It starts from
+<b>NASA's real measured positions</b> on a chosen date, moves them forward with Newton's laws, draws the
+result in 3D, and <b>checks itself</b> against where NASA says things actually were later.</p>
+
+<h2 id="s2">2. The four questions every simulator answers</h2>
+<p>Every physics simulator, whether planets, pendulums, rockets, galaxies or weather, answers the same
+four questions. Keep them in <b>separate pieces of code</b> and the whole project stays easy to understand and change.</p>
+<table>
+  <tr><th style="width:36%">Question</th><th>In this project</th><th style="width:24%">Files</th></tr>
+  <tr><td><b>1. What exists, and what's its state now?</b></td><td>Bodies with mass, position, velocity, loaded from NASA</td><td><code>body.py</code>, <code>data_sources.py</code>, <code>nasa_api.py</code></td></tr>
+  <tr><td><b>2. What rules make things change?</b></td><td>Newton's gravity: every body pulls every other</td><td><code>physics.py</code></td></tr>
+  <tr><td><b>3. How do we move time forward?</b></td><td>Velocity Verlet, in small steps <i>dt</i></td><td><code>integrator.py</code>, <code>simulation.py</code></td></tr>
+  <tr><td><b>4. How do we know it's right?</b></td><td>Energy stays constant; matches NASA a year later</td><td><code>check_accuracy.py</code></td></tr>
+</table>
+<p>Plus two helpers that aren't physics: <b>drawing</b> (<code>visualize.py</code>, <code>camera.py</code>) and
+<b>wiring it together</b> (<code>main.py</code>).</p>
+
+<figure>
+<svg width="640" height="300" viewBox="0 0 640 300" role="img" aria-label="Data flow of the simulator">
+  <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#5a6370"/></marker></defs>
+  <g font-size="11">
+    <rect x="250" y="10" width="140" height="38" rx="6" fill="#e8f0fa" stroke="#1f5fa8"/>
+    <text x="320" y="27" text-anchor="middle" font-weight="700">main.py</text>
+    <text x="320" y="41" text-anchor="middle" fill="#5a6370" font-size="9.5">settings + wiring</text>
+
+    <rect x="20" y="90" width="150" height="38" rx="6" fill="#fdf3e2" stroke="#a3640b"/>
+    <text x="95" y="107" text-anchor="middle" font-weight="700">NASA / JPL</text>
+    <text x="95" y="121" text-anchor="middle" fill="#5a6370" font-size="9.5">Horizons, SBDB, sat. page</text>
+
+    <rect x="200" y="90" width="120" height="38" rx="6" fill="#fff" stroke="#1f5fa8"/>
+    <text x="260" y="107" text-anchor="middle" font-weight="700">nasa_api.py</text>
+    <text x="260" y="121" text-anchor="middle" fill="#5a6370" font-size="9.5">moons, asteroids</text>
+
+    <rect x="340" y="90" width="130" height="38" rx="6" fill="#fff" stroke="#1f5fa8"/>
+    <text x="405" y="107" text-anchor="middle" font-weight="700">data_sources.py</text>
+    <text x="405" y="121" text-anchor="middle" fill="#5a6370" font-size="9.5">builds Bodies</text>
+
+    <rect x="490" y="90" width="130" height="38" rx="6" fill="#fff" stroke="#1f5fa8"/>
+    <text x="555" y="107" text-anchor="middle" font-weight="700">body.py</text>
+    <text x="555" y="121" text-anchor="middle" fill="#5a6370" font-size="9.5">the Body "form"</text>
+
+    <rect x="250" y="165" width="140" height="38" rx="6" fill="#e9f6ee" stroke="#1e7a45"/>
+    <text x="320" y="182" text-anchor="middle" font-weight="700">simulation.py</text>
+    <text x="320" y="196" text-anchor="middle" fill="#5a6370" font-size="9.5">arrays, step(), checks</text>
+
+    <rect x="60" y="245" width="140" height="38" rx="6" fill="#e9f6ee" stroke="#1e7a45"/>
+    <text x="130" y="262" text-anchor="middle" font-weight="700">integrator.py</text>
+    <text x="130" y="276" text-anchor="middle" fill="#5a6370" font-size="9.5">Verlet / Euler step</text>
+
+    <rect x="250" y="245" width="140" height="38" rx="6" fill="#e9f6ee" stroke="#1e7a45"/>
+    <text x="320" y="262" text-anchor="middle" font-weight="700">physics.py</text>
+    <text x="320" y="276" text-anchor="middle" fill="#5a6370" font-size="9.5">gravity, energy, Kepler</text>
+
+    <rect x="440" y="165" width="180" height="38" rx="6" fill="#fff" stroke="#1f5fa8"/>
+    <text x="530" y="182" text-anchor="middle" font-weight="700">visualize.py + camera.py</text>
+    <text x="530" y="196" text-anchor="middle" fill="#5a6370" font-size="9.5">3D view, 60 frames/s</text>
+
+    <rect x="440" y="245" width="180" height="38" rx="6" fill="#fff" stroke="#1f5fa8"/>
+    <text x="530" y="262" text-anchor="middle" font-weight="700">check_accuracy.py</text>
+    <text x="530" y="276" text-anchor="middle" fill="#5a6370" font-size="9.5">tests vs NASA, no graphics</text>
+  </g>
+  <g stroke="#5a6370" stroke-width="1.3" fill="none" marker-end="url(#ar)">
+    <path d="M200,109 L172,109"/>
+    <path d="M320,48 L400,88"/>
+    <path d="M340,109 L322,109"/>
+    <path d="M470,109 L488,109"/>
+    <path d="M405,128 L345,163"/>
+    <path d="M250,184 L150,243"/>
+    <path d="M200,264 L248,264"/>
+    <path d="M320,48 L320,163"/>
+    <path d="M390,184 L438,184"/>
+    <path d="M530,203 L530,243" stroke-dasharray="3 3"/>
+  </g>
+  <text x="208" y="232" font-size="9.5" fill="#5a6370">each step</text>
+  <text x="203" y="258" font-size="9.5" fill="#5a6370">asks forces</text>
+</svg>
+<figcaption>Figure 1. How data flows through the project. Green = the physics engine, which never touches drawing or the internet.</figcaption>
+</figure>
+
+<h2 id="s3">3. Quick start</h2>
+<p>From a terminal in the project folder (Windows PowerShell):</p>
+<pre class="code">py -3.13 -m venv .venv                 # 1. a private Python just for this project
+.venv\Scripts\Activate.ps1            # 2. switch to it (prompt shows "(.venv)")
+pip install -r requirements.txt       # 3. install the packages
+python check_accuracy.py              # 4. test the physics against NASA (no window)
+python main.py                        # 5. open the 3D view in your browser
+python nasa_api.py                    # 6. try the NASA data module on its own
+python docs/build_docs.py             # 7. rebuild this guide</pre>
+<p>What you can change lives in the <b>SETTINGS</b> block at the top of <code>main.py</code> (Appendix B shows its
+current contents): which planets, which moons, which asteroid searches, the time step and the animation speed.</p>
+</section>
+
+<!-- ============================== PART II ============================== -->
+<section class="part">
+<div class="part-label">Part II</div>
+<h1>The physics</h1>
+
+<h2 id="s4">4. Vectors and units</h2>
+<h3>Vectors: arrows with a size and a direction</h3>
+<p>A <b>position</b> is an arrow from a fixed origin to the object: three numbers <b class="v">r</b> = (x, y, z).
+A <b>velocity</b> <b class="v">v</b> = (v<sub>x</sub>, v<sub>y</sub>, v<sub>z</sub>) is an arrow saying which way the object
+moves and how fast. An <b>acceleration</b> <b class="v">a</b> says how the velocity is changing. Bold letters in this
+guide mean vectors. The length of a vector is written |<b class="v">r</b>| or just <i>r</i>, and it comes from
+Pythagoras: <i>r</i> = √(x² + y² + z²). In code: <code>np.linalg.norm(r)</code>.</p>
+<p>Two vector operations appear often:</p>
+<ul>
+  <li><b>Dot product</b> <b class="v">a</b>·<b class="v">b</b> = a<sub>x</sub>b<sub>x</sub> + a<sub>y</sub>b<sub>y</sub> + a<sub>z</sub>b<sub>z</sub>, which measures "how much do these point the same way". The camera uses it to find where the mouse points (Section 29).</li>
+  <li><b>Cross product</b> <b class="v">a</b>×<b class="v">b</b> gives a new arrow perpendicular to both (right-hand rule). It's used for angular momentum (Section 8) and the camera's "right" direction.</li>
+</ul>
+
+<h3>Units: pick one system and convert at the edges</h3>
+<p>Inside the simulator everything is <b>SI</b>: metres, seconds, kilograms. Astronomers often use larger units,
+so we convert only where data enters or leaves:</p>
+<table>
+  <tr><th>Unit</th><th>Value</th><th>Where it appears</th></tr>
+  <tr><td>Astronomical unit (AU)</td><td>1.495978707 × 10<sup>11</sup> m (exact, by definition)</td><td>NASA's positions; drawing scale</td></tr>
+  <tr><td>Day</td><td>86 400 s</td><td>NASA's velocities (AU/day); animation speed</td></tr>
+  <tr><td>GM</td><td>km<sup>3</sup>/s<sup>2</sup> in NASA tables; m<sup>3</sup>/s<sup>2</sup> in code (× 10<sup>9</sup>)</td><td>Masses (Section 21)</td></tr>
+</table>
+<div class="callout warn"><span class="callout-title">Why this matters</span>
+Mixing units is the most common bug in scientific code. A famous real example: NASA's Mars Climate Orbiter
+was lost in 1999 because one team's software used pound-force seconds and another's expected newton-seconds.</div>
+
+<h2 id="s5">5. Newton's laws of motion</h2>
+<ol>
+  <li><b>Inertia.</b> Without a force, an object keeps moving in a straight line at constant speed. Planets
+      "want" to fly off in a straight line. Gravity keeps bending their path.</li>
+  <li><b>F = m a.</b> A force changes velocity. The same force accelerates a light object more than a heavy one.</li>
+  <li><b>Action = reaction.</b> If the Sun pulls Earth, Earth pulls the Sun with an equal and opposite force.
+      The Sun moves much less only because it's 333 000 times heavier.</li>
+</ol>
+
+<h2 id="s6">6. Newton's law of gravitation</h2>
+<p>Every mass attracts every other mass. The pull <b>points toward</b> the other body, is <b>proportional to both
+masses</b>, and falls off with the <b>square of the distance</b>: twice as far means a quarter of the pull.</p>
+<div class="eq"><b class="v">F</b> = G m<sub>1</sub> m<sub>2</sub> / r² &nbsp;(toward the other body)
+<span class="where">G = 6.674 × 10<sup>−11</sup> m³ kg<sup>−1</sup> s<sup>−2</sup> &nbsp;·&nbsp; r = distance between the centres</span></div>
+<p>Combine with <i>F = m a</i>. The mass of the body being pulled <b>cancels out</b>, so its acceleration does not
+depend on its own mass:</p>
+<div class="eq"><b class="v">a</b><sub>i</sub> = G Σ<sub>j≠i</sub> m<sub>j</sub> (<b class="v">r</b><sub>j</sub> − <b class="v">r</b><sub>i</sub>) / |<b class="v">r</b><sub>j</sub> − <b class="v">r</b><sub>i</sub>|³
+<span class="where">add up the pull of every other body j on body i</span></div>
+<ul>
+  <li><b>Why r³ for an inverse-square law?</b> The top part (<b class="v">r</b><sub>j</sub> − <b class="v">r</b><sub>i</sub>) is itself one
+  distance long. Dividing by r³ leaves "a direction of length 1" × "1/r²". One formula gives both direction and strength.</li>
+  <li><b>Superposition:</b> pulls simply add. The pull on Earth = the Sun's pull + the Moon's + Jupiter's + …</li>
+  <li><b>Own mass cancels:</b> a feather and a planet fall the same way. That's why asteroids can be
+  <b>test particles</b> (Section 9): their motion doesn't depend on their mass.</li>
+  <li><b>Point masses (shell theorem):</b> Newton proved that a spherical body pulls exactly as if all its mass
+  sat at its centre. So for orbits only the mass and centre matter, and size and spin don't.</li>
+</ul>
+<div class="callout project"><span class="callout-title">In this project</span>
+<code>physics.accelerations()</code> computes exactly this sum, for every body at once, using NumPy (Section 26).
+Section 17 explains the cost: every pair of bodies must be considered.</div>
+
+<h2 id="s7">7. The two-body problem and Kepler's laws</h2>
+<p>With only <b>two</b> bodies (say, Sun and Earth), Newton's equations can be solved exactly with pen and paper.
+The answer was discovered from observations by Johannes Kepler around 1609–1619, decades <i>before</i> Newton
+explained why. These are <b>Kepler's three laws</b>.</p>
+
+<h3>First law: orbits are ellipses with the Sun at one focus</h3>
+<p>An ellipse is a stretched circle. Its size is the <b>semimajor axis <i>a</i></b> (half the longest width) and its
+stretch is the <b>eccentricity <i>e</i></b>: 0 = circle, 0.0167 = Earth (almost a circle), 0.97 = Halley's comet. The Sun
+sits not at the centre but at a <b>focus</b>. The closest point is <b>perihelion</b>, distance <i>a</i>(1 − <i>e</i>), and the farthest
+is <b>aphelion</b>, <i>a</i>(1 + <i>e</i>). More generally, two-body paths are <b>conic sections</b>: ellipses (bound), parabolas, and
+hyperbolas (escaping, e.g. interstellar visitor ʻOumuamua).</p>
+<figure>
+<svg width="580" height="270" viewBox="0 0 580 270" role="img" aria-label="Kepler ellipse with equal areas">
+  <!-- a = 190, b = 105, e = 0.834, focus offset c = 158.4. The two sectors are computed with
+       Kepler's equation (area swept is proportional to E - e sin E), so they really are equal:
+       perihelion sector E = -60..+60 deg, aphelion sector E = 180 +/- 10.2 deg. -->
+  <ellipse cx="250" cy="125" rx="190" ry="105" fill="none" stroke="#1b1f24" stroke-width="1.5"/>
+  <path d="M408.4,125 L345,34.1 A190,105 0 0 1 345,215.9 Z" fill="#1f5fa8" fill-opacity="0.22" stroke="#1f5fa8"/>
+  <path d="M408.4,125 L63.0,143.6 A190,105 0 0 1 63.0,106.4 Z" fill="#1e7a45" fill-opacity="0.22" stroke="#1e7a45"/>
+  <circle cx="408.4" cy="125" r="9" fill="#f2b632"/>
+  <text x="380" y="150" text-anchor="end" font-size="11">Sun (focus)</text>
+  <circle cx="91.6" cy="125" r="2.5" fill="#5a6370"/>
+  <text x="97" y="160" font-size="10" fill="#5a6370">empty focus</text>
+  <text x="446" y="129" font-size="11">perihelion</text>
+  <text x="56" y="129" text-anchor="end" font-size="11">aphelion</text>
+  <line x1="60" y1="244" x2="250" y2="244" stroke="#5a6370"/>
+  <line x1="60" y1="238" x2="60" y2="250" stroke="#5a6370"/><line x1="250" y1="238" x2="250" y2="250" stroke="#5a6370"/>
+  <line x1="250" y1="125" x2="250" y2="236" stroke="#c4ccd6" stroke-dasharray="3 3"/>
+  <text x="155" y="262" text-anchor="middle" font-size="11"><tspan font-style="italic">a</tspan> = semimajor axis</text>
+  <text x="452" y="52" font-size="10.5" fill="#1f5fa8">fast near the Sun:</text>
+  <text x="452" y="66" font-size="10.5" fill="#1f5fa8">short, wide sweep</text>
+  <text x="6" y="30" font-size="10.5" fill="#1e7a45">slow far away: long, thin sweep</text>
+  <text x="6" y="44" font-size="10.5" fill="#1e7a45">(same area, same time)</text>
+</svg>
+<figcaption>Figure 2. Kepler's first and second laws (eccentricity exaggerated). The two shaded sectors are swept in equal times.</figcaption>
+</figure>
+
+<h3>Second law: equal areas in equal times</h3>
+<p>The line from the Sun to the planet sweeps out equal areas in equal times, so a planet moves <b>fast near the
+Sun and slow far away</b>. <b>Why:</b> gravity pulls straight toward the Sun, so it can't twist the orbit, and
+<b>angular momentum</b> <i>L</i> = <i>m r v</i><sub>⊥</sub> stays constant (Section 8). Smaller <i>r</i> forces bigger <i>v</i>.
+Earth moves 30.3 km/s in January and 29.3 km/s in July.</p>
+
+<h3>Third law: T² ∝ a³</h3>
+<div class="eq">T = 2π √( a³ / GM )
+<span class="where">T = orbital period · a = semimajor axis · M = mass of the central body (strictly, M + m)</span></div>
+<p>Bigger orbits take longer, and not just because they're longer: the planet also moves slower. Check with Earth:
+<i>a</i> = 1.496 × 10<sup>11</sup> m and <i>GM</i><sub>Sun</sub> = 1.327 × 10<sup>20</sup> m³/s² give <i>T</i> = 3.156 × 10<sup>7</sup> s = <b>365.25 days</b>. In
+"astronomer units" (T in years, a in AU, around the Sun) it becomes simply <b>T² = a³</b>: Jupiter at 5.2 AU takes
+√(5.2³) ≈ 11.9 years.</p>
+
+<h3>Vis-viva: the orbit's size from a single snapshot</h3>
+<p>Energy conservation gives a relation between speed <i>v</i> at distance <i>r</i> and the orbit size <i>a</i>:</p>
+<div class="eq">v² = GM ( 2/r − 1/a ) &nbsp;&nbsp;⇒&nbsp;&nbsp; a = 1 / ( 2/r − v²/GM )</div>
+<p>Two famous special cases: <b>circular speed</b> <i>v</i> = √(GM/r) (for Earth: 29.8 km/s) and <b>escape speed</b>
+<i>v</i> = √(2GM/r). If 2/<i>r</i> − <i>v</i>²/<i>GM</i> ≤ 0 the body is not bound at all.</p>
+
+<div class="callout project"><span class="callout-title">How this project uses Kepler's laws</span>
+<ul style="margin:0">
+<li><code>physics.orbital_period()</code> takes a moon's position and velocity <i>relative to its planet</i>, gets <i>a</i>
+from vis-viva, then <i>T</i> from the third law.</li>
+<li><code>data_sources.suggest_time_step()</code> uses that period to pick a safe time step: about 1/100 of the fastest orbit
+(Io: 1.77 days → 25.5 minutes). See Section 16.</li>
+<li><code>data_sources.make_moon()</code> uses it again to set each moon's spin, because big moons are tidally locked (Section 11).</li>
+<li>The simulation <b>doesn't use</b> Kepler's laws to move anything. It uses Newton's law directly, and Kepler's laws come out
+by themselves. That's a good check: our Earth really does take 365.25 days.</li>
+</ul></div>
+<p>Kepler's laws are exact only for <b>two</b> bodies. With three or more, the bodies tug on each other and the ellipses slowly
+change (<i>perturbations</i>). That's why we need the N-body approach of Section 9.</p>
+
+<h2 id="s8">8. Conservation laws: the simulator's test suite</h2>
+<p>In a closed system with only gravity, three totals <b>never change</b>. The simulation does not enforce them. It just
+follows the forces. So <b>if they drift, the numerical method is making errors</b>. That's how you test a simulator
+when you don't know the right answer.</p>
+<table>
+  <tr><th>Quantity</th><th>Formula</th><th>Why it's constant</th></tr>
+  <tr><td><b>Energy</b></td><td>E = Σ ½ m v² − Σ<sub>pairs</sub> G m<sub>i</sub> m<sub>j</sub> / r<sub>ij</sub></td><td>No friction; nothing to lose energy to</td></tr>
+  <tr><td><b>Momentum</b></td><td><b class="v">P</b> = Σ m <b class="v">v</b></td><td>Newton's 3rd law: internal pulls cancel in pairs</td></tr>
+  <tr><td><b>Angular momentum</b></td><td><b class="v">L</b> = Σ m (<b class="v">r</b> × <b class="v">v</b>)</td><td>Gravity acts along the line between bodies, so no twist</td></tr>
+</table>
+<p>The first term of <i>E</i> is <b>kinetic</b> energy (energy of motion). The second is <b>potential</b> energy, which is
+<b>negative</b> because the bodies sit in a gravitational "well": you'd have to <i>add</i> energy to separate them to infinity,
+where potential energy is defined as zero. A planet constantly trades the two: it speeds up as it falls closer, but the sum stays fixed.</p>
+<div class="callout project"><span class="callout-title">In this project</span>
+<code>physics.py</code> has <code>total_energy</code>, <code>total_momentum</code> and <code>total_angular_momentum</code>.
+<code>check_accuracy.py</code> reports the relative energy error |E(t) − E₀| / |E₀|. Test particles are excluded from
+these sums: they get pulled without pulling back, so they're not part of the conserved system.</div>
+
+<h2 id="s9">9. The N-body problem</h2>
+<p>With three or more bodies there is <b>no general formula</b>. Henri Poincaré showed in the 1890s that the
+three-body problem is in general <b>chaotic</b>: tiny differences in the start grow until the outcomes are completely different.
+So we solve it <b>numerically</b>, in small time steps (Part III). That's an <b>N-body simulation</b>, and the method is an
+<b>N-body integrator</b>.</p>
+<h3>The barycenter (centre of mass)</h3>
+<p>The mass-weighted average position <b class="v">R</b> = Σ m<b class="v">r</b> / Σ m. By Newton's laws it moves at constant velocity
+forever. In the Solar System it's close to the Sun but not at it: Jupiter pulls it to just outside the Sun's surface at times.
+NASA measures positions from the <b>Solar System Barycenter (SSB)</b>.</p>
+<div class="callout project"><span class="callout-title">In this project</span>
+NASA's coordinates include pulls from bodies we may not simulate (Pluto, thousands of asteroids). Our subset's own
+centre of mass may then drift slowly across the screen. <code>Simulation.move_to_center_of_mass()</code> subtracts it, so
+total momentum becomes exactly zero. <code>check_accuracy.py</code> skips this and compares Earth <i>relative to the Sun</i>
+instead, which doesn't depend on the origin.</div>
+<h3>Test particles</h3>
+<p>Objects so light that their pull is negligible. Ceres, the largest asteroid, has about 1/6000 of Earth's mass. We let them
+<b>feel</b> gravity but skip their <b>pull</b>. In code, their "gravity mass" is set to 0, so no special-case <code>if</code> is needed.</p>
+<h3>Hierarchical systems</h3>
+<p>Moons orbit planets that orbit the Sun: an orbit inside an orbit. This matters in two ways: moons force small time steps
+(Section 16), and a planet's mass must not be counted twice (Section 22).</p>
+
+<h2 id="s10">10. Reference frames and time</h2>
+<ul>
+<li><b>Ecliptic frame.</b> The x-y plane is the plane of Earth's orbit (the <i>ecliptic</i>). +x points to the March
+equinox (where the Sun appears on ~20 March). +z is "ecliptic north". Seen from +z, all planets orbit counter-clockwise.</li>
+<li><b>Barycentric.</b> The origin is the Solar System Barycenter (Section 9).</li>
+<li><b>TDB time.</b> "Barycentric Dynamical Time" is the steady clock used for planetary motion. It differs from everyday
+UTC by about 69 seconds (leap seconds and relativity).</li>
+<li><b>Screen frame.</b> VPython uses y = up on screen. The view draws simulation (x, y, z) at screen (x, z, −y), a pure
+rotation, so left/right handedness and orbit direction are kept.</li>
+</ul>
+
+<h2 id="s11">11. Spin, axial tilt, seasons and tidal locking</h2>
+<p><b>Revolution</b> (going around the Sun) comes from gravity. <b>Rotation</b> (spinning around one's own axis) is a
+separate motion. Because of the shell theorem (Section 6), spin doesn't change the orbit in this model, so it's simple
+geometry: <i>angle turned = 360° × elapsed time / rotation period</i>.</p>
+<ul>
+<li><b>Sidereal vs solar day.</b> Earth turns once relative to the <i>stars</i> in 23 h 56 m (sidereal). Relative to the
+<i>Sun</i> it takes 24 h, because Earth moves ~1° along its orbit each day and must turn a bit extra. We use sidereal periods.</li>
+<li><b>Axial tilt (obliquity).</b> The angle between the spin axis and the orbit's "north". Earth: 23.44°. Over 90° means
+the body spins backwards (<i>retrograde</i>): Venus 177.4° (upside down, slowly backwards), Uranus 97.8° (rolling on its side).</li>
+<li><b>Seasons.</b> A spinning planet is a gyroscope: its axis points the <b>same way in space all year</b>. In June
+Earth's north leans toward the Sun (summer), and in December, on the far side of the orbit, it leans away. Seasons are
+<b>not</b> caused by distance: Earth is actually closest to the Sun in January.</li>
+<li><b>Tidal locking.</b> A planet's gravity stretches a nearby moon slightly. Friction from that stretching slowly
+brakes the moon's spin until one rotation takes exactly one orbit. That's why we always see the same face of our Moon. Most
+large moons are locked, so the project sets their spin period equal to their orbital period (Kepler's third law).</li>
+</ul>
+<figure>
+<svg width="560" height="170" viewBox="0 0 560 170" role="img" aria-label="Axial tilt and seasons">
+  <ellipse cx="280" cy="85" rx="200" ry="45" fill="none" stroke="#c4ccd6" stroke-dasharray="5 4"/>
+  <circle cx="280" cy="85" r="18" fill="#f2b632"/>
+  <text x="280" y="122" text-anchor="middle" font-size="10.5">Sun</text>
+  <circle cx="80" cy="85" r="16" fill="#3f7fd0"/>
+  <line x1="88" y1="57" x2="72" y2="113" stroke="#1b1f24" stroke-width="2"/>
+  <text x="80" y="140" text-anchor="middle" font-size="10.5">June: north leans</text>
+  <text x="80" y="153" text-anchor="middle" font-size="10.5">toward the Sun, summer</text>
+  <circle cx="480" cy="85" r="16" fill="#3f7fd0"/>
+  <line x1="488" y1="57" x2="472" y2="113" stroke="#1b1f24" stroke-width="2"/>
+  <text x="480" y="140" text-anchor="middle" font-size="10.5">December: same lean,</text>
+  <text x="480" y="153" text-anchor="middle" font-size="10.5">north away, winter</text>
+  <text x="88" y="50" text-anchor="middle" font-size="9.5" fill="#5a6370">N</text>
+  <text x="488" y="50" text-anchor="middle" font-size="9.5" fill="#5a6370">N</text>
+</svg>
+<figcaption>Figure 3. The axis keeps the same direction in space (schematic; the tilt is drawn toward/away from the Sun).</figcaption>
+</figure>
+
+<h2 id="s12">12. What this model leaves out</h2>
+<p>Every model is a simplification. Knowing what's missing tells you how far to trust it.</p>
+<table>
+  <tr><th>Missing effect</th><th>Size</th><th>Matters for</th></tr>
+  <tr><td><b>General relativity</b> (Einstein's correction to Newton, strongest near the Sun)</td><td>Mercury's perihelion turns an extra 43″ per century; Earth's position shifts by tens of km per year</td><td>The leftover ~50 km error in our NASA test</td></tr>
+  <tr><td><b>Non-spherical shapes</b> (planets bulge at the equator, "J2")</td><td>Tiny for planets' orbits; large for close moons and satellites</td><td>Inner moons, spacecraft</td></tr>
+  <tr><td><b>Tides</b> (bodies stretching each other)</td><td>The Moon recedes 3.8 cm/year</td><td>Millions of years</td></tr>
+  <tr><td><b>Non-gravitational forces</b> (comet outgassing, sunlight pressure, Yarkovsky effect)</td><td>Significant for comets and small asteroids</td><td>Comet predictions, asteroid impact risk</td></tr>
+  <tr><td><b>Collisions</b></td><td>Bodies pass through each other here</td><td>Close encounters, planet formation</td></tr>
+</table>
+</section>
+
+<!-- ============================== PART III ============================== -->
+<section class="part">
+<div class="part-label">Part III</div>
+<h1>Numerical integration: the "N-body integrator"</h1>
+
+<h2 id="s13">13. What an integrator is</h2>
+<p>Physics gives us <b>rates of change</b>, not answers. The position changes at the rate of the velocity, and the velocity
+changes at the rate of the acceleration:</p>
+<div class="eq">d<b class="v">r</b>/dt = <b class="v">v</b> &nbsp;&nbsp;&nbsp;&nbsp; d<b class="v">v</b>/dt = <b class="v">a</b>(<b class="v">r</b>)
+<span class="where">a pair of differential equations; <b class="v">a</b> comes from gravity (Section 6)</span></div>
+<p>An <b>integrator</b> turns rates into a path. It takes the <b>state</b> (all positions and velocities) at time <i>t</i> and
+estimates the state at <i>t</i> + <i>dt</i>. Repeat thousands of times and you have the future. The name comes from calculus,
+where adding up many tiny changes is called <i>integrating</i>.</p>
+<p>An <b>N-body integrator</b> is just this machine applied to N gravitating bodies. In the notebook that started this
+project (<code>N-integral.ipynb</code>) it was a loop with four lines. In this project the same idea is split into
+"the step method" (<code>integrator.py</code>) and "the forces" (<code>physics.py</code>), so either can be swapped.</p>
+<div class="callout"><span class="callout-title">Analogy</span>
+Driving with your eyes closed, opening them for a split second every <i>dt</i> to check which way to steer. The shorter the
+gaps, the better you follow the road. But a clever <i>steering rule</i> matters even more than the gap length (next two sections).</div>
+
+<h2 id="s14">14. Forward Euler and why orbits spiral</h2>
+<pre class="code">new_pos = pos + vel * dt     # move in a straight line with the OLD velocity
+new_vel = vel + acc * dt     # then update the velocity</pre>
+<p>The simplest method (Leonhard Euler, 1768). Each step moves in a <b>straight line along the current direction</b>. But a
+straight line that touches a circle always ends up slightly <b>outside</b> it. Every step adds a sliver of energy, and the orbit
+<b>spirals outward</b> forever. A smaller <i>dt</i> slows the spiral but never stops it.</p>
+<figure>
+<svg width="460" height="200" viewBox="0 0 460 200" role="img" aria-label="Euler overshoot">
+  <defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#c0392b"/></marker></defs>
+  <circle cx="140" cy="190" r="150" fill="none" stroke="#1b1f24" stroke-width="1.3"/>
+  <circle cx="140" cy="190" r="9" fill="#f2b632"/>
+  <circle cx="140" cy="40" r="5" fill="#3f7fd0"/>
+  <line x1="140" y1="40" x2="250" y2="40" stroke="#c0392b" stroke-width="2" marker-end="url(#ar2)"/>
+  <circle cx="250" cy="40" r="4" fill="#c0392b"/>
+  <line x1="140" y1="190" x2="250" y2="40" stroke="#5a6370" stroke-dasharray="3 3"/>
+  <text x="258" y="36" font-size="11" fill="#c0392b">Euler lands here,</text>
+  <text x="258" y="50" font-size="11" fill="#c0392b">outside the orbit</text>
+  <text x="300" y="120" font-size="11" fill="#5a6370">distance grows each step,</text>
+  <text x="300" y="134" font-size="11" fill="#5a6370">so energy grows, so it spirals out</text>
+</svg>
+<figcaption>Figure 4. One Euler step (step size exaggerated). The tangent line overshoots the circle.</figcaption>
+</figure>
+<p><b>Measured in this project</b> (Sun + Earth, <i>dt</i> = 1 hour, one year): energy error 1 part in 100, Earth
+5 300 000 km away from where NASA says it really was.</p>
+
+<h2 id="s15">15. Velocity Verlet (leapfrog) and symplectic methods</h2>
+<pre class="code">half_vel = vel + 0.5 * dt * acc            # 1. KICK:  half a velocity update (old force)
+new_pos  = pos + dt * half_vel             # 2. DRIFT: move with the half-way velocity
+new_acc  = accel_func(new_pos)             # 3. compute gravity at the new positions
+new_vel  = half_vel + 0.5 * dt * new_acc   # 4. KICK:  other half (new force)</pre>
+<figure>
+<svg width="520" height="90" viewBox="0 0 520 90" role="img" aria-label="Kick drift kick timeline">
+  <line x1="40" y1="45" x2="480" y2="45" stroke="#1b1f24"/>
+  <text x="40" y="75" text-anchor="middle" font-size="11">t</text>
+  <text x="480" y="75" text-anchor="middle" font-size="11">t + dt</text>
+  <line x1="40" y1="38" x2="40" y2="52" stroke="#1b1f24"/><line x1="480" y1="38" x2="480" y2="52" stroke="#1b1f24"/>
+  <rect x="40" y="20" width="60" height="18" fill="#1e7a45" opacity="0.8"/><text x="70" y="33" text-anchor="middle" font-size="10" fill="#fff">½ kick</text>
+  <rect x="100" y="52" width="320" height="18" fill="#1f5fa8" opacity="0.8"/><text x="260" y="65" text-anchor="middle" font-size="10" fill="#fff">drift (move with the half-way velocity)</text>
+  <rect x="420" y="20" width="60" height="18" fill="#1e7a45" opacity="0.8"/><text x="450" y="33" text-anchor="middle" font-size="10" fill="#fff">½ kick</text>
+</svg>
+<figcaption>Figure 5. Kick-drift-kick: the velocity change is shared between the start and the end of the step.</figcaption>
+</figure>
+<p>It costs the same as Euler (one gravity calculation per step), but it's <b>time-symmetric</b>: run it backwards
+and it retraces its path exactly. Methods that preserve the deep geometric structure of Newton's equations
+(the "phase-space volume") are called <b>symplectic</b>. Their energy error <b>does not build up</b>. It just wobbles
+slightly and stays bounded for millions of orbits. That's why real planetary codes use this family of methods.</p>
+<table>
+  <tr><th>Measured (Sun + Earth, dt = 1 h, 1 year)</th><th>Energy error</th><th>Earth vs NASA</th></tr>
+  <tr><td>Forward Euler</td><td>9 × 10<sup>−3</sup></td><td>5 300 000 km</td></tr>
+  <tr><td>Velocity Verlet</td><td>9 × 10<sup>−9</sup> (about 1 million times smaller)</td><td>1 160 000 km*</td></tr>
+</table>
+<p class="muted" style="font-size:9.3pt">* The remaining position error with Verlet is not the integrator's fault. It's missing physics: with only
+Sun + Earth, nothing pulls Earth the way the Moon, Venus and Jupiter really do. See Part VII.</p>
+<div class="callout project"><span class="callout-title">In this project</span>
+Both methods live in <code>integrator.py</code> with the <b>same signature</b>
+<code>step(pos, vel, acc, accel_func, dt) → (new_pos, new_vel, new_acc)</code>, so they plug in interchangeably
+(<code>python check_accuracy.py --integrator euler</code>). Passing <code>acc</code> in and out means gravity is computed
+only once per step: step 3's result is exactly what the next step's step 1 needs.</div>
+
+<h2 id="s16">16. Errors and choosing the time step</h2>
+<ul>
+<li><b>Truncation error:</b> the error from replacing a smooth curve with straight pieces. Euler is a <i>first-order</i> method
+(halving <i>dt</i> roughly halves its error). Verlet is <i>second-order</i> (halving <i>dt</i> roughly quarters it).</li>
+<li><b>Round-off error:</b> computers store about 16 significant digits. Billions of tiny steps add up their round-off,
+so infinitely small <i>dt</i> isn't the answer either.</li>
+<li><b>Rule of thumb:</b> at least ~<b>100 steps per orbit of the fastest body</b>. Then halve <i>dt</i> and check the answer barely
+changes. If it changes a lot, <i>dt</i> was too big.</li>
+</ul>
+<table>
+  <tr><th>Fastest body</th><th>Its orbit</th><th>Safe dt (÷ 100)</th></tr>
+  <tr><td>Earth around the Sun</td><td>365.25 days</td><td>~3.7 days (we use 1 hour anyway)</td></tr>
+  <tr><td>Moon around Earth</td><td>27.3 days</td><td>~6.5 hours</td></tr>
+  <tr><td>Io around Jupiter</td><td>1.77 days</td><td>~25 minutes</td></tr>
+  <tr><td>Phobos around Mars</td><td>7.65 hours</td><td>~4.6 minutes (slow to run!)</td></tr>
+</table>
+<div class="callout project"><span class="callout-title">In this project</span>
+<code>main.py</code> calls <code>suggest_time_step()</code> and automatically shrinks <code>DT_HOURS</code> if a fast moon
+needs it, printing which moon forced the change. The fastest body sets the pace for everyone: that's why the book's
+later chapters introduce <i>adaptive</i> and <i>per-body</i> time steps.</div>
+
+<h2 id="s17">17. Speed: the N² problem</h2>
+<p>Each body feels every other body, so N bodies have about N² pairs. 30 bodies = 900 pairs per step, which is trivial.
+100 000 stars = 10 billion pairs per step, which is not. Three tools keep it manageable:</p>
+<ul>
+<li><b>Vectorization (used here):</b> NumPy computes all pairs in one operation in compiled C, about 50–100× faster than Python loops.</li>
+<li><b>Test particles (used here):</b> massless bodies cost (planets × all) instead of (all × all), so thousands of asteroids are cheap.</li>
+<li><b>Approximation (not used here):</b> the <b>Barnes–Hut</b> tree method treats a distant cluster as one mass (N log N);
+galaxy simulations use this, often on GPUs.</li>
+</ul>
+
+<h2 id="s18">18. Beyond this project: better integrators</h2>
+<table>
+  <tr><th>Method</th><th>Idea</th><th>When to use</th></tr>
+  <tr><td>Runge–Kutta 4 (RK4)</td><td>Samples the slope 4 times per step and averages</td><td>Very accurate short runs; energy drifts slowly over long ones</td></tr>
+  <tr><td>Adaptive step (RKF45, Dormand–Prince)</td><td>Estimates its own error and grows/shrinks <i>dt</i></td><td>Comets and close encounters, where speed changes a lot</td></tr>
+  <tr><td>IAS15 (Gauss–Radau, 15th order)</td><td>Very high-order with automatic steps; errors at round-off level</td><td>Research-grade accuracy (used in REBOUND)</td></tr>
+  <tr><td>Wisdom–Holman</td><td>Solves each planet's Kepler ellipse <i>exactly</i> and adds planet–planet tugs as kicks</td><td>Millions of years of Solar System evolution</td></tr>
+</table>
+<p>The book <i>Moving Planets Around</i> (in this folder) builds these step by step: Euler (Ch. 3), conservation checks (Ch. 4),
+RK4/leapfrog/symplectic (Ch. 5), adaptive steps (Ch. 6), N bodies (Ch. 7), IAS15 (Ch. 8), Wisdom–Holman (Ch. 9).</p>
+</section>
+
+<!-- ============================== PART IV ============================== -->
+<section class="part">
+<div class="part-label">Part IV</div>
+<h1>Real data from NASA/JPL</h1>
+
+<h2 id="s19">19. Where the numbers come from</h2>
+<p>Gravity tells you <i>how</i> things move. The <b>initial conditions</b> (positions and velocities at a starting moment)
+tell you <i>what</i> the orbits are. Two identical Earths with different starting speeds trace completely different paths.
+NASA's Jet Propulsion Laboratory (JPL) tracks the Solar System with radar, spacecraft and telescopes, and publishes it for free,
+with no API key. NASA has no single "everything" API, so this project combines several official sources:</p>
+<table>
+  <tr><th>What</th><th>JPL source</th><th>Used by</th></tr>
+  <tr><td>Positions and velocities on any date</td><td>Horizons API (via the <code>astroquery</code> package)</td><td><code>data_sources.fetch_state_vector</code></td></tr>
+  <tr><td>Every moon of every planet</td><td>Horizons "major body" (MB) index</td><td><code>nasa_api.list_moons</code></td></tr>
+  <tr><td>Moon masses (GM), radii, densities</td><td>Planetary Satellite Physical Parameters page</td><td><code>nasa_api.moon_physical_data</code></td></tr>
+  <tr><td>Planet mass without its moons</td><td>Same page, second table</td><td><code>nasa_api.planet_gm_without_moons</code></td></tr>
+  <tr><td>Asteroid and comet search (1.5 million+)</td><td>Small-Body Database (SBDB) Query API</td><td><code>nasa_api.query_small_bodies</code></td></tr>
+  <tr><td>Find any object by name</td><td>Horizons Lookup API</td><td><code>nasa_api.lookup</code></td></tr>
+  <tr><td>Planet sizes, spin periods, tilts</td><td>NASA Planetary Fact Sheet (typed into a table)</td><td><code>data_sources.PHYSICAL_DATA</code></td></tr>
+</table>
+<div class="callout project"><span class="callout-title">Caching</span>
+Every download is saved: positions in <code>data/horizons_cache.json</code>, everything else in <code>data/nasa_cache/</code>.
+The second run is instant, works offline, and doesn't burden NASA's servers. Delete the files (or pass <code>refresh=True</code>)
+to fetch fresh data. Always cache slow or remote data in scientific code.</div>
+
+<h2 id="s20">20. JPL Horizons: positions and velocities</h2>
+<p>We ask Horizons for <b>state vectors</b> with three settings: <code>location="500@0"</code> (measure from the Solar System
+Barycenter), <code>refplane="ecliptic"</code> (the ecliptic frame), and the date in the <b>TDB</b> time scale (Section 10). Horizons
+answers in AU and AU/day, and we convert to metres and m/s.</p>
+<h3>Horizons ID numbers</h3>
+<table>
+  <tr><th>ID</th><th>Meaning</th><th>Example</th></tr>
+  <tr><td>0</td><td>Solar System Barycenter</td><td></td></tr>
+  <tr><td>1–9</td><td>Planet <b>system</b> barycenter (planet + its moons as one point)</td><td>5 = Jupiter system</td></tr>
+  <tr><td>10</td><td>The Sun</td><td></td></tr>
+  <tr><td>X99</td><td>Planet X's own body</td><td>399 Earth, 599 Jupiter</td></tr>
+  <tr><td>X01–X98, X5nnn</td><td>Moons of planet X</td><td>301 Moon, 501 Io, 55501 (S/2003 J2)</td></tr>
+  <tr><td><code>DES=&lt;spkid&gt;;</code></td><td>Asteroid by its database ID (a plain number is not accepted; found by testing)</td><td><code>DES=20000001;</code> = Ceres</td></tr>
+  <tr><td>designation + "closest apparition"</td><td>Comets (each return to the Sun has its own orbit solution)</td><td><code>1P</code> = Halley</td></tr>
+</table>
+<p>For Jupiter–Neptune the project normally uses the <b>system barycenter</b> (5–8) with the <b>system GM</b>: if the moons aren't
+simulated, "planet + moons as one point" is the most accurate stand-in. Section 22 explains what changes when moons are added.</p>
+
+<h2 id="s21">21. Masses: why we store GM</h2>
+<p>Gravity only ever uses the product <b>G × M</b>. Astronomers measure that product directly from how spacecraft and moons are pulled,
+to about <b>11 digits</b>. <i>G</i> by itself is known to only about <b>5 digits</b>, so "mass in kg" is the <i>less</i> precise number.</p>
+<div class="callout warn"><span class="callout-title">A real bug from this project's history</span>
+The first version stored masses in kg. With all planets included, Earth ended up <b>88 700 km</b> off after one year. The 0.0045 %
+error in <i>G</i> × <i>M</i><sub>Sun</sub> slightly changed every orbit's speed. Switching to JPL's GM values (from the DE440 planetary model)
+brought it down to <b>109 km</b>. The code now stores GM and computes <code>mass = GM / G</code>, so <code>G × mass</code> gives NASA's exact GM back.
+<b>Lesson: store the quantity that is measured most precisely.</b></div>
+
+<h2 id="s22">22. Moons</h2>
+<p><code>nasa_api.list_moons(planet)</code> reads the Horizons major-body index: Earth 1, Mars 2, Jupiter 115, Saturn ~290, Uranus 28,
+Neptune 16, Pluto 5. JPL has measured masses for about 46 of them. Moons without a mass become test particles.</p>
+<div class="callout warn"><span class="callout-title">The double-counting rule</span>
+Normally Jupiter is simulated as "Jupiter + all its moons" in one point (ID 5, system GM). If you <i>also</i> add Io separately, Io's
+mass would be counted twice. So when a planet's moons are added, <code>build_system()</code> switches that planet to its own body
+(ID 599) and its <b>moon-free GM</b> (from <code>planet_gm_without_moons()</code>).</div>
+<p>Each moon's spin is set from <b>tidal locking</b> (Section 11). Its orbital period comes from Kepler's laws (Section 7). Io gives
+42.5 h = 1.77 days, matching its real orbit.</p>
+
+<h2 id="s23">23. Asteroids and comets</h2>
+<p><code>nasa_api.query_small_bodies()</code> searches JPL's Small-Body Database: 1.58 million asteroids and 4 089 comets at the
+time of writing. You can filter by <b>orbit class</b>, near-Earth only, and sort by size. Fields returned include GM (only for
+the few with measured masses, like Ceres and Vesta), diameter, spin period, and orbit elements <i>a</i>, <i>e</i>, <i>i</i>.</p>
+<table>
+  <tr><th>Class</th><th>Meaning</th></tr>
+  <tr><td>MBA</td><td>Main belt, between Mars and Jupiter (most asteroids)</td></tr>
+  <tr><td>APO / ATE / AMO / IEO</td><td>Near-Earth groups: Apollo, Aten, Amor, Atira (by how their orbit relates to Earth's)</td></tr>
+  <tr><td>TJN</td><td>Jupiter trojans: share Jupiter's orbit, 60° ahead or behind (stable Lagrange points L4/L5)</td></tr>
+  <tr><td>CEN, TNO</td><td>Centaurs (between Jupiter and Neptune), trans-Neptunian objects (Kuiper belt)</td></tr>
+  <tr><td>JFc, HTC</td><td>Jupiter-family comets, Halley-type comets</td></tr>
+</table>
+<p>Measured result: adding the 10 biggest asteroids' gravity changed Earth's one-year position by <b>no measurable amount</b>. Their
+combined mass is about 1/2000 of Earth's. Name clashes are handled too: asteroid "52 Europa" vs Jupiter's moon Europa keeps its full name.</p>
+</section>
+
+<!-- ============================== PART V ============================== -->
+<section class="part">
+<div class="part-label">Part V</div>
+<h1>The code, file by file</h1>
+
+<h2 id="s24">24. Architecture and design principles</h2>
+<ol>
+<li><b>Separation of concerns.</b> State, forces, stepping, drawing and data each live in their own file. The integrator
+never knows it's computing <i>gravity</i>: it just calls "the force function". The same integrator could run a pendulum.</li>
+<li><b>Everything is a Body.</b> The simulator never asks "is this a planet?". Sun, moon, asteroid, comet, or a star you invent
+are the same type. Adding objects needs no physics changes.</li>
+<li><b>Arrays for speed, objects for clarity.</b> Body objects are easy to read and create. The Simulation copies them into
+NumPy arrays where the maths happens.</li>
+<li><b>Special cases as data, not <code>if</code>s.</b> Test particles have gravity-mass 0. A body's distance to itself is set to
+infinity so 1/∞ = 0. The maths stays fast and simple.</li>
+<li><b>Adapter for messy sources.</b> <code>nasa_api.py</code> hides four different NASA formats behind plain functions. If NASA
+changes a format, only that file changes.</li>
+<li><b>Physics in true units, drawing in fake ones.</b> Drawing tricks never leak into the maths (Section 28).</li>
+<li><b>Measure, don't eyeball.</b> <code>check_accuracy.py</code> turns "looks right" into numbers.</li>
+</ol>
+
+<h2 id="s25">25. The Python and NumPy toolkit</h2>
+<table>
+  <tr><th style="width:28%">Concept</th><th>What it is</th><th style="width:28%">Where</th></tr>
+  <tr><td>Module / <code>import</code></td><td>Each .py file is a module; <code>from physics import G</code> borrows a name from another file</td><td>everywhere</td></tr>
+  <tr><td>Class, object, <code>self</code></td><td>A class is a blueprint; an object is one thing built from it; <code>self</code> = "this object"</td><td><code>Simulation</code>, <code>FlyCamera</code></td></tr>
+  <tr><td><code>@dataclass</code></td><td>A class that's mostly a form with named fields and defaults</td><td><code>Body</code></td></tr>
+  <tr><td><code>_name</code></td><td>Convention for "internal, don't call from outside"</td><td><code>_pack</code>, <code>_apply</code></td></tr>
+  <tr><td>List comprehension</td><td><code>[make_body(n, d) for n in names]</code> builds a list in one line</td><td><code>main.py</code></td></tr>
+  <tr><td>Functions as values</td><td>Pass a function without <code>()</code> so someone else can call it later</td><td><code>accel_func</code>, <code>INTEGRATORS</code></td></tr>
+  <tr><td><code>if __name__ == "__main__"</code></td><td>Run only when the file is executed directly, not when imported</td><td>scripts</td></tr>
+  <tr><td>NumPy array, shape</td><td>A grid of numbers; positions have shape (N, 3)</td><td><code>simulation.py</code></td></tr>
+  <tr><td>Broadcasting</td><td>Combining shapes (1,N,3) and (N,1,3) gives all N×N pairs at once</td><td><code>physics.accelerations</code></td></tr>
+</table>
+<h3>Broadcasting, slowly</h3>
+<pre class="code">diff = positions[np.newaxis, :, :] - positions[:, np.newaxis, :]   # shape (N, N, 3)
+# diff[i, j] = arrow from body i to body j, for ALL pairs, like a multiplication table:
+#               rows = "who is pulled", columns = "who pulls"
+dist = np.linalg.norm(diff, axis=2)      # (N, N) table of distances
+np.fill_diagonal(dist, np.inf)           # body-to-itself = infinity, so 1/inf = 0, no self-pull
+pull = gravity_masses[None, :, None] * inv_r3[:, :, None] * diff
+acc  = G * pull.sum(axis=1)              # add up each row: total pull on each body</pre>
+
+<h2 id="s26">26. Every file explained</h2>
+
+<h3><code>main.py</code>: the switchboard</h3>
+<p>Holds the <b>SETTINGS</b> (date, planets, moons, asteroid searches, time step, speed) and wires the pieces together:
+<code>build_system</code> → <code>suggest_time_step</code> → <code>Simulation</code> → <code>move_to_center_of_mass</code> →
+<code>SolarSystemView.run()</code>. Short on purpose: it shouldn't contain any physics.</p>
+
+<h3><code>body.py</code>: what one object is</h3>
+<p>A <code>@dataclass</code> with <b>physics fields</b> (<code>mass</code>, <code>position</code>, <code>velocity</code>,
+<code>is_test_particle</code>) and <b>drawing-only fields</b> (<code>radius</code>, <code>rotation_period</code>,
+<code>axial_tilt</code>, <code>color</code>, <code>texture</code>, <code>parent</code>). <code>__post_init__</code> runs right after
+creation: it converts vectors to float arrays and rejects bad input early (wrong length, negative mass).</p>
+
+<h3><code>data_sources.py</code>: turning NASA data into Bodies</h3>
+<ul>
+<li><code>PHYSICAL_DATA</code>: table of Horizons ID, GM, radius, sidereal spin, tilt and colour for the Sun, planets and Moon.</li>
+<li><code>fetch_state_vector()</code>: asks Horizons for position and velocity (cached), converts AU → m.</li>
+<li><code>make_body()</code>: Sun/planet/Moon Body; with <code>without_moons_gm</code> switches to the planet's own body (Section 22).</li>
+<li><code>make_moon()</code>, <code>make_small_body_from_record()</code>, <code>make_small_body()</code>: moons, asteroids, comets.</li>
+<li><code>build_system()</code>: assembles everything from the settings and applies the double-counting rule.</li>
+<li><code>suggest_time_step()</code>: Kepler-based safe <i>dt</i> (Section 16).</li>
+</ul>
+
+<h3><code>nasa_api.py</code>: the adapter to NASA</h3>
+<p><code>list_moons</code>, <code>moon_physical_data</code>, <code>planet_gm_without_moons</code>, <code>query_small_bodies</code>,
+<code>count_small_bodies</code>, <code>lookup</code>. Uses only Python's standard library: <code>urllib</code> to download,
+<code>json</code>, and a small <code>HTMLParser</code> subclass to read JPL's tables. Run <code>python nasa_api.py</code> for a demo.</p>
+
+<h3><code>simulation.py</code>: the manager</h3>
+<ul>
+<li><code>_pack()</code>: copies Bodies into arrays: <code>positions</code> (N,3), <code>velocities</code> (N,3), <code>masses</code>, and
+<code>gravity_masses</code> (0 for test particles). Also computes the first accelerations.</li>
+<li><code>add_body()</code>: the door for new objects, even mid-run.</li>
+<li><code>move_to_center_of_mass()</code>: removes centre-of-mass position and velocity (Section 9).</li>
+<li><code>step(n)</code>: the heartbeat: calls the integrator <i>n</i> times, adds <i>dt</i> to the clock.</li>
+<li><code>sync_bodies()</code>, <code>energy()</code>, <code>momentum()</code>, <code>angular_momentum()</code>.</li>
+</ul>
+
+<h3><code>physics.py</code>: the rules</h3>
+<p><code>accelerations()</code> (Newton's gravity for all pairs), the conservation-law totals, and <code>orbital_period()</code>
+(vis-viva + Kepler's third law). The only file that knows what gravity is.</p>
+
+<h3><code>integrator.py</code>: moving time forward</h3>
+<p><code>forward_euler_step</code> and <code>velocity_verlet_step</code> with identical signatures, plus the <code>INTEGRATORS</code>
+dictionary so they can be chosen by name.</p>
+
+<h3><code>visualize.py</code>: the 3D view</h3>
+<p><code>SolarSystemView</code> creates one VPython sphere per body (with tilt, texture, trail and label), the controls (pause,
+follow menu, overview, time-speed and flight-speed sliders) and the animation loop <code>run()</code>. Details in Section 28.</p>
+
+<h3><code>camera.py</code>: the free-flying camera</h3>
+<p><code>FlyCamera</code> stores its own position, <i>yaw</i> and <i>pitch</i>, reads the keyboard and mouse each frame, and positions
+VPython's camera. Details in Section 29.</p>
+
+<h3><code>check_accuracy.py</code>: proving it's right</h3>
+<p>Runs a simulation with no graphics, tracks energy, then compares Earth's position (relative to the Sun) with NASA's after
+the run. Options: <code>--bodies</code>, <code>--start</code>, <code>--days</code>, <code>--dt-hours</code>, <code>--integrator</code>,
+<code>--asteroids</code>.</p>
+
+<h3><code>docs/build_docs.py</code>: this guide</h3>
+<p>Builds this PDF from <code>docs/source/guide.html</code> and fills in the generated appendices. <code>--check</code> lists
+code that changed since the guide was last built.</p>
+
+<h2 id="s27">27. One frame, traced end to end</h2>
+<pre class="code">view.run()  ── a new frame begins (at 10 days/s and 60 frames/s it owes 4 hours)
+   ├─► sim.step(n) ───────────── repeated n times (n = owed time / dt):
+   │      └─► velocity_verlet_step
+   │             1. kick  (half velocity change)
+   │             2. drift (move)
+   │             3. accelerations()  ◄── gravity: who pulls whom, how hard
+   │             4. kick  (other half)
+   │           clock += dt
+   ├─► _redraw()        move spheres, spin them, move labels, update the date
+   ├─► camera.update()  read keys/mouse, fly, place VPython's camera
+   └─► rate(60)         wait so we draw at most 60 frames per second</pre>
+<p><b>Time debt:</b> each frame adds <i>days_per_second × 1 day / 60</i> to a "debt" and pays it off in whole steps of <i>dt</i>.
+The remainder carries over, so even very slow speeds (less than one step per frame) run at the correct average rate. Simulation
+time and screen time are separate clocks, and this is the link between them.</p>
+</section>
+
+<!-- ============================== PART VI ============================== -->
+<section class="part">
+<div class="part-label">Part VI</div>
+<h1>Drawing it: visualization and camera</h1>
+
+<h2 id="s28">28. The 3D view</h2>
+<h3>The scale problem</h3>
+<p>Space is almost empty. If Earth's orbit were a 10 m wide circle, Earth would be a 0.4 mm speck and the Sun a 9 cm ball.
+Every planetarium cheats, and so do we, <b>only when drawing</b>:</p>
+<ul>
+<li><b>Distances:</b> 1 AU = 10 screen units (shrunk evenly).</li>
+<li><b>Sizes:</b> enlarged and compressed with a <b>square root</b>. Jupiter (11× Earth's width) is drawn only √11 ≈ 3.3× wider. The Sun is
+capped so it doesn't swallow Mercury. There's a minimum size so 20 km moons stay visible.</li>
+<li><b>Moons:</b> drawn 30× farther from their planet than reality, or they'd hide inside the enlarged planet.</li>
+</ul>
+<h3>Light, spin, tilt, trails</h3>
+<ul>
+<li>The default lights are removed and a single light is placed at the Sun, so every body has a real <b>day and night side</b>.</li>
+<li>Each sphere is tilted once by its axial tilt, then each frame turned by <i>2π × elapsed / rotation period</i> about that axis.
+VPython's <code>rotate()</code> uses the right-hand rule, so positive angles are counter-clockwise seen from the north, which is how Earth spins.</li>
+<li>Trails keep the last 4000 points, one every 2 frames. At high speed, fast moons' trails look zig-zagged because each frame
+covers a big part of their orbit.</li>
+</ul>
+
+<h2 id="s29">29. The free-flying camera</h2>
+<p>VPython's built-in camera always <b>orbits a fixed point</b>. <code>camera.py</code> replaces it with a game-style camera.</p>
+<table>
+  <tr><th>Control</th><th>Action</th></tr>
+  <tr><td>W / S, A / D, E (or Space) / Q</td><td>Forward/back, left/right, up/down</td></tr>
+  <tr><td>Arrow keys</td><td>Turn left/right, look up/down</td></tr>
+  <tr><td>Hold left mouse</td><td>Steer toward the pointer (further from centre = faster turn)</td></tr>
+  <tr><td>Mouse wheel, Shift</td><td>Hop forward/back; 5× faster</td></tr>
+  <tr><td>Follow menu, Overview button</td><td>Ride along with any body; jump back to the full view</td></tr>
+</table>
+<ul>
+<li><b>Yaw and pitch:</b> the direction is stored as two angles (turning the body, tilting the head). Each frame they become three
+arrows, <i>forward</i>, <i>right</i> (forward × up) and <i>up</i>, and the keys move along them. Pitch stops at 89° because straight up makes
+"right" undefined.</li>
+<li><b>Adaptive speed:</b> flying speed is proportional to the distance to the nearest object, so you creep near planets and race
+through empty space (the trick Celestia and SpaceEngine use).</li>
+<li><b>The clipping trap:</b> VPython only draws objects between <i>d</i>/100 and 10<i>d</i> from the camera, where <i>d</i> is the
+distance to its look-at point (found in VPython's own source code). So the look-at point is kept at 10× the nearest object's distance.</li>
+<li><b>Why steering, not dragging:</b> VPython reports the mouse a frame or two late. "Turn by how far the mouse moved" would then
+feed back on itself and jitter. "Turn rate proportional to the pointer offset" is immune to the delay.</li>
+<li><b>Following:</b> each frame the camera moves by however much the target moved, so you can still fly around it while riding along.</li>
+</ul>
+</section>
+
+<!-- ============================== PART VII ============================== -->
+<section class="part">
+<div class="part-label">Part VII</div>
+<h1>Is it right? Validation</h1>
+
+<h2 id="s30">30. Testing against reality</h2>
+<p><code>check_accuracy.py</code> runs two tests without graphics:</p>
+<ol>
+<li><b>Conservation test:</b> does total energy stay constant? This tests the <i>integrator</i>.</li>
+<li><b>Reality test:</b> start from NASA's real state on a date, simulate one year, and compare Earth's position <i>relative to the Sun</i>
+with NASA's real one a year later. This tests <i>physics and data together</i>.</li>
+</ol>
+<table>
+  <tr><th>Setup (start 2026-01-01, 1 year)</th><th>Energy error</th><th>Earth vs NASA</th></tr>
+  <tr><td>Sun + Earth, Euler, dt = 1 h</td><td>~1 × 10<sup>−2</sup></td><td>~5 300 000 km</td></tr>
+  <tr><td>Sun + Earth, Verlet, dt = 1 h</td><td>~1 × 10<sup>−8</sup></td><td>~1 160 000 km</td></tr>
+  <tr><td>All planets + Moon, masses in kg (old bug)</td><td>~5 × 10<sup>−9</sup></td><td>~88 700 km</td></tr>
+  <tr><td>All planets + Moon, NASA GM, dt = 1 h</td><td>~5 × 10<sup>−9</sup></td><td><b>~109 km</b></td></tr>
+  <tr><td>Same, dt = 15 min</td><td>~3 × 10<sup>−10</sup></td><td><b>~50 km</b></td></tr>
+  <tr><td>Same + 10 biggest asteroids</td><td>~3 × 10<sup>−10</sup></td><td>~50 km (no change)</td></tr>
+</table>
+<p><b>Reading the table:</b> 50 km after a journey of about 940 million km is an error of 0.000005 %. The remaining gap is mostly
+general relativity (Section 12), which a Newtonian code cannot capture. The table also shows why each design decision exists:
+Verlet over Euler, all planets, GM over kg.</p>
+<div class="callout"><span class="callout-title">Experiments to try (predict first, then run)</span>
+<code>python check_accuracy.py --dt-hours 0.5</code> &nbsp;·&nbsp; <code>--integrator euler</code> &nbsp;·&nbsp;
+<code>--days 3650</code> &nbsp;·&nbsp; <code>--bodies Sun Earth Moon</code> &nbsp;·&nbsp; <code>--bodies Sun Earth Jupiter</code>.
+Which single planet matters most for Earth? When your prediction is wrong, find out why. That's how intuition is built.</div>
+</section>
+
+<!-- ============================== PART VIII ============================== -->
+<section class="part">
+<div class="part-label">Part VIII</div>
+<h1>Going further</h1>
+
+<h2 id="s31">31. Extending the project</h2>
+<table>
+  <tr><th>You want to…</th><th>Change</th></tr>
+  <tr><td>Add planets, moons, asteroid searches</td><td>Only the SETTINGS in <code>main.py</code></td></tr>
+  <tr><td>Add Pluto</td><td>One row in <code>PHYSICAL_DATA</code> (ID 9, GM ≈ 975.5, radius 1188.3 km, spin 153.29 h, tilt 122.53°)</td></tr>
+  <tr><td>Invent a body (a rogue star)</td><td>Create a <code>Body(...)</code> and call <code>sim.add_body()</code></td></tr>
+  <tr><td>Add a force (relativity, thrust)</td><td>Add a term in <code>physics.accelerations</code>; the integrator is untouched</td></tr>
+  <tr><td>Add an integrator (RK4)</td><td>A new function with the standard signature in <code>integrator.py</code> + an <code>INTEGRATORS</code> entry</td></tr>
+  <tr><td>Add a data source</td><td>A function in <code>nasa_api.py</code> that returns plain dicts</td></tr>
+</table>
+<h3>A ladder of practice simulators (same structure, different rules)</h3>
+<ol>
+<li><b>Pendulum:</b> force = −(g/L) sin θ. The same Verlet step works on any force.</li>
+<li><b>Masses on springs:</b> Hooke's law; watch energy swap between motion and stretch.</li>
+<li><b>Binary star with a planet:</b> two Sun-mass bodies. Can the planet survive? (The book's research project, Ch. 11–13.)</li>
+<li><b>Galaxy collision:</b> thousands of bodies plus <i>softening</i> (add a small ε² to r²) so close passes don't explode.</li>
+<li><b>Rocket to Mars:</b> a spacecraft test particle with thrust; find a launch window.</li>
+<li><b>Charged particles:</b> Coulomb's law has the same 1/r² shape, but like charges repel.</li>
+</ol>
+
+<h2 id="s32">32. Troubleshooting</h2>
+<table>
+  <tr><th>Symptom</th><th>Cause and fix</th></tr>
+  <tr><td><code>No module named 'pkg_resources'</code></td><td>vpython 7.6.5 needs setuptools &lt; 81: <code>pip install "setuptools&lt;81"</code> (pinned in requirements.txt)</td></tr>
+  <tr><td>pip "long path" errors on Windows</td><td>Paths over 260 characters. Keep the project in a short folder, or enable Windows long paths</td></tr>
+  <tr><td>Keys don't move the camera</td><td>Click the 3D view first so it has keyboard focus</td></tr>
+  <tr><td>Arrow keys or Space scroll the page</td><td>The page is bigger than the window. Enlarge the window or use E/Q</td></tr>
+  <tr><td>Animation slow with many bodies</td><td>Fewer asteroids/moons, or lower the time speed. Fast moons (Phobos) force tiny steps</td></tr>
+  <tr><td>A moon flies away or crashes</td><td><i>dt</i> too large for its orbit; keep <code>suggest_time_step()</code> enabled</td></tr>
+  <tr><td>NASA data looks stale / offline errors</td><td>Delete <code>data/horizons_cache.json</code> and <code>data/nasa_cache/</code> and re-run with internet</td></tr>
+  <tr><td><code>import vpython</code> opens a browser tab</td><td>That's how VPython works; test physics with <code>check_accuracy.py</code> instead</td></tr>
+</table>
+
+<h2 id="s33">33. Glossary</h2>
+<table>
+  <tr><td style="width:27%"><b>AU</b></td><td>Astronomical unit, 149.6 million km, the average Earth–Sun distance</td></tr>
+  <tr><td><b>Barycenter</b></td><td>Centre of mass, the balance point of a group of bodies</td></tr>
+  <tr><td><b>Ecliptic</b></td><td>The plane of Earth's orbit; our x-y plane</td></tr>
+  <tr><td><b>Eccentricity (e)</b></td><td>How stretched an orbit is: 0 circle, &lt;1 ellipse, ≥1 escape</td></tr>
+  <tr><td><b>GM</b></td><td>Gravitational constant × mass; the precisely measured "pulling strength"</td></tr>
+  <tr><td><b>Initial conditions</b></td><td>All positions and velocities at the starting moment</td></tr>
+  <tr><td><b>Integrator</b></td><td>Algorithm that advances the state by one time step</td></tr>
+  <tr><td><b>N-body problem</b></td><td>Predicting the motion of N mutually gravitating bodies; no general formula for N ≥ 3</td></tr>
+  <tr><td><b>Obliquity</b></td><td>Axial tilt relative to the orbit</td></tr>
+  <tr><td><b>Perihelion / aphelion</b></td><td>Closest / farthest point of an orbit around the Sun</td></tr>
+  <tr><td><b>Semimajor axis (a)</b></td><td>Half the longest width of an orbit, its "size"</td></tr>
+  <tr><td><b>Sidereal</b></td><td>Measured relative to the distant stars</td></tr>
+  <tr><td><b>State vector</b></td><td>Position + velocity (6 numbers per body)</td></tr>
+  <tr><td><b>Symplectic</b></td><td>Integrator type whose energy error stays bounded instead of drifting</td></tr>
+  <tr><td><b>TDB</b></td><td>Barycentric Dynamical Time, the time scale of planetary ephemerides</td></tr>
+  <tr><td><b>Test particle</b></td><td>Body that feels gravity but is too light to pull on others</td></tr>
+  <tr><td><b>Tidal locking</b></td><td>Spin slowed until one rotation = one orbit</td></tr>
+  <tr><td><b>Vis-viva</b></td><td>v² = GM(2/r − 1/a), linking speed, distance and orbit size</td></tr>
+</table>
+
+<h2 id="s34">34. Further reading</h2>
+<ul>
+<li><b>Moving Planets Around: An Introduction to N-Body Simulations Applied to Exoplanetary Systems</b> (Javier Roa, Adrian S. Hamers,
+Maxwell X. Cai and Nathan W. C. Leigh; MIT Press 2020, open access under CC BY-NC 4.0; the PDF is in this folder). The textbook
+this project follows: physics background (Ch. 2), first code (Ch. 3), accuracy (Ch. 4), integrators (Ch. 5–9), production code (Ch. 10), a research project (Ch. 11–14).</li>
+<li><b>REBOUND</b>: research-grade open-source N-body code (Python and C) with IAS15 and Wisdom–Holman.</li>
+<li><b>Astropy</b>: units, times and coordinate frames done properly. <b>Skyfield</b>: precise "where is it in my sky" positions.</li>
+<li><b>JPL Solar System Dynamics</b> (ssd.jpl.nasa.gov): Horizons, the Small-Body Database and the API documentation.</li>
+<li>Maths worth learning next: vectors and the cross product, ordinary differential equations, basic numerical analysis.</li>
+</ul>
+</section>
+
+<!-- ============================== APPENDICES ============================== -->
+<section class="part">
+<div class="part-label">Appendix A</div>
+<h1 id="appA">Code reference</h1>
+<p class="muted">Generated from the code's own docstrings each time the guide is built, so it always matches the code.
+Private helpers (names starting with "_") are left out.</p>
+<h3 class='refmod'>body.py</h3>
+<p class='refsummary'>body.py - the one data type every object in the simulator shares.</p>
+<div class='ref'><code class='sig'>class Body</code><div class='refdoc'></div></div>
+<h3 class='refmod'>camera.py</h3>
+<p class='refsummary'>camera.py - a free-flying camera, like in a 3D game.</p>
+<div class='ref'><code class='sig'>class FlyCamera</code><div class='refdoc'></div></div>
+<div class='ref'><code class='sig'>FlyCamera.__init__(self, scene)</code></div>
+<div class='ref'><code class='sig'>FlyCamera.forward(self)</code><div class='refdoc'>Unit arrow pointing where the camera looks, built from yaw and pitch.</div></div>
+<div class='ref'><code class='sig'>FlyCamera.right(self)</code></div>
+<div class='ref'><code class='sig'>FlyCamera.up(self)</code></div>
+<div class='ref'><code class='sig'>FlyCamera.look_at(self, point)</code><div class='refdoc'>Turn (without moving) to face a point.</div></div>
+<div class='ref'><code class='sig'>FlyCamera.set_home(self, pos, look_at)</code></div>
+<div class='ref'><code class='sig'>FlyCamera.go_home(self)</code><div class='refdoc'>Back to the overview position, in free flight.</div></div>
+<div class='ref'><code class='sig'>FlyCamera.follow(self, sphere)</code><div class='refdoc'>Fly to a body and ride along with it. You can still fly around it with the keys: following only adds the body's own motion to yours.</div></div>
+<div class='ref'><code class='sig'>FlyCamera.update(self, dt, spheres)</code><div class='refdoc'>Call once per animation frame. dt = real seconds since last frame.</div></div>
+<h3 class='refmod'>check_accuracy.py</h3>
+<p class='refsummary'>check_accuracy.py - is the simulator right? Measure it, don't eyeball it.</p>
+<div class='ref'><code class='sig'>main()</code></div>
+<h3 class='refmod'>data_sources.py</h3>
+<p class='refsummary'>data_sources.py - real data from NASA, turned into Body objects.</p>
+<div class='ref'><code class='sig'>fetch_state_vector(horizons_id, date, id_type=None, **vector_options)</code><div class='refdoc'>Ask JPL Horizons where a body is on `date` (e.g. "2026-01-01").</div></div>
+<div class='ref'><code class='sig'>make_body(name, date, without_moons_gm=None)</code><div class='refdoc'>Create a Sun/planet/Moon Body with real NASA starting conditions.</div></div>
+<div class='ref'><code class='sig'>make_small_body(designation, date, name=None, radius_km=50.0, color=(0.7, 0.7, 0.6))</code><div class='refdoc'>Create an asteroid or comet as a TEST PARTICLE (pulled, but doesn't pull).</div></div>
+<div class='ref'><code class='sig'>make_moon(moon, date, parent_body, physical=None)</code><div class='refdoc'>Build a moon Body from a list_moons() entry, e.g. {"horizons_id": "501", "name": "Io", "planet": "Jupiter"}</div></div>
+<div class='ref'><code class='sig'>short_name(full_name)</code><div class='refdoc'>'1 Ceres (A801 AA)' -&gt; 'Ceres' ;  '15789 (1993 SC)' -&gt; '1993 SC' ;  '1P/Halley' -&gt; '1P/Halley'</div></div>
+<div class='ref'><code class='sig'>make_small_body_from_record(record, date)</code><div class='refdoc'>Build an asteroid/comet Body from a nasa_api.query_small_bodies() result.</div></div>
+<div class='ref'><code class='sig'>build_system(date, planet_names, moons=None, small_body_queries=(), extra_small_bodies=())</code><div class='refdoc'>Assemble a whole simulation in one call.</div></div>
+<div class='ref'><code class='sig'>suggest_time_step(bodies, steps_per_orbit=100)</code><div class='refdoc'>The largest SAFE time step (seconds) for these bodies.</div></div>
+<h3 class='refmod'>integrator.py</h3>
+<p class='refsummary'>integrator.py - moving time forward by one small step `dt`.</p>
+<div class='ref'><code class='sig'>forward_euler_step(pos, vel, acc, accel_func, dt)</code><div class='refdoc'>The method from your Chapter 3 notebook. Kept here so you can compare.</div></div>
+<div class='ref'><code class='sig'>velocity_verlet_step(pos, vel, acc, accel_func, dt)</code><div class='refdoc'>Velocity Verlet, also called "leapfrog" or "kick-drift-kick" (Chapter 5 of the book).</div></div>
+<h3 class='refmod'>main.py</h3>
+<p class='refsummary'>main.py - start the 3D Solar System.</p>
+<div class='ref'><code class='sig'>main()</code></div>
+<h3 class='refmod'>nasa_api.py</h3>
+<p class='refsummary'>nasa_api.py - one simple doorway to NASA/JPL data on moons, asteroids and comets.</p>
+<div class='ref'><code class='sig'>list_moons(planet, refresh=False)</code><div class='refdoc'>Every moon of `planet` that NASA tracks, as a list of dicts: [{"horizons_id": "501", "name": "Io", "planet": "Jupiter"}, ...]</div></div>
+<div class='ref'><code class='sig'>moon_physical_data(refresh=False)</code><div class='refdoc'>Measured GM, mean radius and density for every moon JPL has values for, keyed by Horizons ID: {"501": {"name": "Io", "planet": "Jupiter", "gm": 5959.9155, "radius_km": 1821.49, "density": 3.528}, ...} Values that haven't been measured are None.</div></div>
+<div class='ref'><code class='sig'>planet_gm_without_moons(refresh=False)</code><div class='refdoc'>GM of each planet's body ALONE (moons not included), km^3/s^2: {"Earth": 398600.436, "Mars": 42828.37362, "Jupiter": 126686531.9, ...}</div></div>
+<div class='ref'><code class='sig'>query_small_bodies(kind='asteroid', sb_class=None, near_earth=False, limit=20, sort='-diameter', refresh=False)</code><div class='refdoc'>Search JPL's Small-Body Database. Returns a list of dicts like: {"spkid": "20000001", "name": "1 Ceres (A801 AA)", "designation": "1", "kind": "asteroid", "orbit_class": "MBA", "gm": 62.6284, "diameter_km": 939.4, "rotation_hours": 9.07, "a_au": 2.77, "e": 0.0797, "i_deg": 10.59, "period_years": 4.6}</div></div>
+<div class='ref'><code class='sig'>count_small_bodies(kind='asteroid', refresh=False)</code><div class='refdoc'>How many asteroids (or comets) does JPL know about right now?</div></div>
+<div class='ref'><code class='sig'>lookup(name, group=None, refresh=False)</code><div class='refdoc'>Ask NASA what it calls an object and which ID numbers it uses: lookup("Io")       -&gt; [{"name": "Io", "spkid": "501", "type": "natural satellite", ...}] lookup("Halley")   -&gt; the comet AND an asteroid also named Halley group: None, or one of "ast", "com", "pln", "sat" to narrow the search.</div></div>
+<h3 class='refmod'>physics.py</h3>
+<p class='refsummary'>physics.py - Newtonian gravity for any number of bodies.</p>
+<div class='ref'><code class='sig'>accelerations(positions, gravity_masses)</code><div class='refdoc'>Gravitational acceleration of every body due to every other body.</div></div>
+<div class='ref'><code class='sig'>kinetic_energy(velocities, gravity_masses)</code><div class='refdoc'>Energy of motion: sum of 1/2 m v^2 (joules).</div></div>
+<div class='ref'><code class='sig'>potential_energy(positions, gravity_masses)</code><div class='refdoc'>Gravitational binding energy: sum over each PAIR of -G m_i m_j / r_ij.</div></div>
+<div class='ref'><code class='sig'>total_energy(positions, velocities, gravity_masses)</code><div class='refdoc'>Kinetic + potential. For a bound orbit this total is negative. A planet trades between the two: it speeds up (more kinetic) as it falls closer (more negative potential), but the SUM stays fixed.</div></div>
+<div class='ref'><code class='sig'>total_momentum(velocities, gravity_masses)</code><div class='refdoc'>sum of m * v (kg m/s). Newton's 3rd law: every pull has an equal and opposite pull back, so the total never changes.</div></div>
+<div class='ref'><code class='sig'>orbital_period(rel_position, rel_velocity, mu)</code><div class='refdoc'>How long one orbit takes (seconds), for a body moving around a central body. Uses the position and velocity RELATIVE to that central body. mu = G * (M_central + m_orbiting), m^3/s^2.</div></div>
+<div class='ref'><code class='sig'>total_angular_momentum(positions, velocities, gravity_masses)</code><div class='refdoc'>sum of m * (r x v). Roughly "how much the system is spinning". Conserving it is why planets move faster when close to the Sun (Kepler's 2nd law: equal areas in equal times).</div></div>
+<h3 class='refmod'>simulation.py</h3>
+<p class='refsummary'>simulation.py - holds all the bodies and runs time forward.</p>
+<div class='ref'><code class='sig'>class Simulation</code><div class='refdoc'></div></div>
+<div class='ref'><code class='sig'>Simulation.__init__(self, bodies, dt, integrator=velocity_verlet_step)</code><div class='refdoc'>bodies     : list of Body dt         : time step in seconds. It must be MUCH smaller than the fastest orbit in the system (rule of thumb: about 1/100 of it or less). Earth's year = 3.2e7 s, the Moon's month = 2.4e6 s, so 1 hour (3600 s) is safe for both. integrator : any function from integrator.py</div></div>
+<div class='ref'><code class='sig'>Simulation.add_body(self, body: Body)</code><div class='refdoc'>The way to bring new objects in: asteroids, comets, a rogue star... Can be called before running or in the middle of a run.</div></div>
+<div class='ref'><code class='sig'>Simulation.index(self, name)</code></div>
+<div class='ref'><code class='sig'>Simulation.move_to_center_of_mass(self)</code><div class='refdoc'>Shift positions and velocities so the balance point of OUR bodies sits still at the origin.</div></div>
+<div class='ref'><code class='sig'>Simulation.step(self, n_steps=1)</code><div class='refdoc'>Advance the simulation by n_steps * dt seconds.</div></div>
+<div class='ref'><code class='sig'>Simulation.sync_bodies(self)</code><div class='refdoc'>Copy the live arrays back into the Body objects.</div></div>
+<div class='ref'><code class='sig'>Simulation.energy(self)</code></div>
+<div class='ref'><code class='sig'>Simulation.momentum(self)</code></div>
+<div class='ref'><code class='sig'>Simulation.angular_momentum(self)</code></div>
+<h3 class='refmod'>visualize.py</h3>
+<p class='refsummary'>visualize.py - the 3D view, drawn with VPython (opens in a browser tab).</p>
+<div class='ref'><code class='sig'>to_scene(p)</code><div class='refdoc'>Simulation coordinates (metres, z-up) -&gt; VPython screen vector (y-up).</div></div>
+<div class='ref'><code class='sig'>display_radius(body)</code></div>
+<div class='ref'><code class='sig'>class SolarSystemView</code><div class='refdoc'></div></div>
+<div class='ref'><code class='sig'>SolarSystemView.__init__(self, sim, start_date, days_per_second=10.0)</code></div>
+<div class='ref'><code class='sig'>SolarSystemView.run(self)</code><div class='refdoc'>Animate forever (close the browser tab / Ctrl+C to stop).</div></div>
+</section>
+
+<section class="part">
+<div class="part-label">Appendix B</div>
+<h1 id="appB">Current settings</h1>
+<p class="muted">Copied from the SETTINGS block of <code>main.py</code> when this guide was built.</p>
+<pre class='code'># ============================== SETTINGS ===================================
+START_DATE = "2026-01-01"   # real NASA positions on this date
+
+# BODY_NAMES = ["Sun", "Earth"]
+# BODY_NAMES = ["Sun", "Earth", "Moon"]
+BODY_NAMES = ["Sun", "Mercury", "Venus", "Earth", "Moon", "Mars",
+              "Jupiter", "Saturn", "Uranus", "Neptune"]
+
+# Moons of other planets, fetched from NASA. For each planet, give:
+#   a list of names  -&gt; just those moons
+#   "measured"       -&gt; every moon whose mass JPL has measured (the big ones)
+#   "all"            -&gt; every moon NASA tracks (Saturn alone has ~290!)
+# Try:  python -c "import nasa_api; print(nasa_api.list_moons('Saturn'))"
+MOONS = {
+    "Jupiter": ["Io", "Europa", "Ganymede", "Callisto"],   # the 4 Galilean moons
+    "Saturn": ["Titan", "Rhea", "Iapetus"],
+    # "Mars": ["Phobos", "Deimos"],  # WARNING: Phobos orbits in 7.7 h -&gt; tiny dt -&gt; slow
+    # "Uranus": "measured",
+    # "Neptune": ["Triton"],
+}
+
+# Asteroid/comet searches in JPL's Small-Body Database (see nasa_api.py).
+SMALL_BODY_QUERIES = [
+    {"kind": "asteroid", "limit": 10},                        # the 10 biggest asteroids
+    # {"kind": "asteroid", "sb_class": "TJN", "limit": 20},    # Jupiter trojans
+    # {"kind": "asteroid", "near_earth": True, "limit": 20},   # biggest near-Earth asteroids
+    # {"kind": "comet", "limit": 5},                           # 5 biggest comets
+]
+
+# Hand-picked extras as (Horizons designation, display name).
+SMALL_BODIES = [("99942", "Apophis")]
+
+DT_HOURS = 1.0              # largest time step allowed. Made smaller automatically for fast moons
+DAYS_PER_SECOND = 10.0      # starting animation speed (adjustable with the slider)
+# ===========================================================================</pre>
+
+<h1 id="appC" style="margin-top:12mm">Appendix C: Document history</h1>
+<p class="muted">Newest first. Each entry says what changed in the code and which chapters were updated.</p>
+<table>
+  <tr><th style="width:18%">Date</th><th>Change</th></tr>
+  <tr><td>2026-11-20</td><td>First edition of the guide. Covers: N-body physics and Kepler's laws, Euler vs Verlet, NASA/JPL data
+  (planets, moons, asteroids, comets via <code>nasa_api.py</code>), free-flying camera, validation results, build system.</td></tr>
+</table>
+</section>
+
+</body>
+</html>

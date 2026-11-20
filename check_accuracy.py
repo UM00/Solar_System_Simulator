@@ -32,7 +32,7 @@ That shows, with numbers, that the planets really do pull on each other.
 
 The last ~50 km comes from physics this model leaves out, mainly Einstein's
 general relativity (a tiny correction to Newton near the Sun; it shifts
-Earth by roughly 30 km per year). Measured: adding the 10 biggest asteroids'
+Earth by tens of kilometres per year). Measured: adding the 10 biggest asteroids'
 gravity changes nothing at this level. Their combined mass is about 1/2000
 of Earth's.
 """
