@@ -73,6 +73,7 @@ DISTANCE_SCALE = 10.0 / AU   # 1 AU -> 10 screen units
 EARTH_RADIUS_M = 6.371e6
 PLANET_SIZE = 0.20           # Earth's drawn radius, in screen units
 STAR_SIZE = 1.2              # the Sun's drawn radius (capped, or it would swallow Mercury)
+MIN_SIZE = 0.012             # smallest drawn radius, so small moons/asteroids stay visible
 MOON_DISTANCE_EXAGGERATION = 30.0
 FPS = 60
 
@@ -86,8 +87,9 @@ def display_radius(body):
     if body.radius > 1e8:  # bigger than any planet -> it's a star
         return STAR_SIZE
     # Square root keeps the size ORDER right (Jupiter > Earth > Moon)
-    # without the giants being absurdly large.
-    return PLANET_SIZE * math.sqrt(body.radius / EARTH_RADIUS_M)
+    # without the giants being absurdly large. A minimum size keeps tiny
+    # moons and asteroids (Phobos is 22 km wide) visible as dots.
+    return max(PLANET_SIZE * math.sqrt(body.radius / EARTH_RADIUS_M), MIN_SIZE)
 
 
 class SolarSystemView:

@@ -18,12 +18,14 @@ with the same date is instant, works offline, and doesn't hammer NASA.
 """
 
 import json
+import re
 from pathlib import Path
 
 import numpy as np
 
+import nasa_api
 from body import Body
-from physics import G
+from physics import G, orbital_period
 
 AU = 1.495978707e11  # metres in one astronomical unit (exact, by definition)
 DAY = 86400.0        # seconds in one day
@@ -93,7 +95,7 @@ def _save_cache(cache):
     CACHE_FILE.write_text(json.dumps(cache, indent=2))
 
 
-def fetch_state_vector(horizons_id, date, id_type=None):
+def fetch_state_vector(horizons_id, date, id_type=None, **vector_options):
     """
     Ask JPL Horizons where a body is on `date` (e.g. "2026-01-01").
 
@@ -110,6 +112,8 @@ def fetch_state_vector(horizons_id, date, id_type=None):
                              everyday UTC by about 69 seconds.
     """
     key = f"{horizons_id}|{id_type}|{date}"
+    if vector_options:  # e.g. comets: closest_apparition=True
+        key += "|" + ",".join(f"{k}={v}" for k, v in sorted(vector_options.items()))
     cache = _load_cache()
     if key in cache:
         entry = cache[key]
@@ -121,7 +125,7 @@ def fetch_state_vector(horizons_id, date, id_type=None):
 
     epoch = Time(date, scale="tdb")
     query = Horizons(id=horizons_id, id_type=id_type, location="500@0", epochs=epoch.jd)
-    table = query.vectors(refplane="ecliptic")
+    table = query.vectors(refplane="ecliptic", **vector_options)
     row = table[0]
 
     # Horizons answers in AU and AU/day. Convert to SI (metres, m/s).
@@ -140,11 +144,21 @@ def fetch_state_vector(horizons_id, date, id_type=None):
 # ---------------------------------------------------------------------------
 # Building Bodies
 # ---------------------------------------------------------------------------
-def make_body(name, date):
-    """Create a Sun/planet/Moon Body with real NASA starting conditions."""
+def make_body(name, date, without_moons_gm=None):
+    """
+    Create a Sun/planet/Moon Body with real NASA starting conditions.
+
+    without_moons_gm: leave as None normally. When this planet's moons are
+        ALSO being simulated, pass the planet-only GM here. The planet then
+        switches from "planet + moons as one point" (barycenter, e.g. id 5)
+        to "the planet's own body" (id 599), so no mass is counted twice.
+    """
     if name not in PHYSICAL_DATA:
         raise KeyError(f"No physical data for {name!r}. Known: {list(PHYSICAL_DATA)}")
     horizons_id, gm_km3, radius_km, rotation_h, tilt, color = PHYSICAL_DATA[name]
+    if without_moons_gm is not None:
+        horizons_id = f"{nasa_api.PLANET_NUMBERS[name]}99"
+        gm_km3 = without_moons_gm
     position, velocity = fetch_state_vector(horizons_id, date)
     # km^3 -> m^3 is a factor of 1000^3 = 1e9. Dividing by G gives kg, and the
     # physics multiplies by G again, so G*mass == NASA's GM exactly.
@@ -188,3 +202,189 @@ def make_small_body(designation, date, name=None, radius_km=50.0, color=(0.7, 0.
         radius=radius_km * KM,
         color=color,
     )
+
+
+# ---------------------------------------------------------------------------
+# Moons, asteroids and comets from nasa_api.py
+# ---------------------------------------------------------------------------
+MOON_COLOR = (0.75, 0.72, 0.68)
+ASTEROID_COLOR = (0.70, 0.66, 0.55)
+COMET_COLOR = (0.60, 0.85, 1.00)
+
+
+def make_moon(moon, date, parent_body, physical=None):
+    """
+    Build a moon Body from a list_moons() entry, e.g.
+        {"horizons_id": "501", "name": "Io", "planet": "Jupiter"}
+
+    physical    : the moon_physical_data() entry for it, if JPL has one.
+                  Moons with a measured GM pull on things. Tiny moons
+                  without one become test particles (pulled, not pulling).
+    parent_body : the planet's Body. Needed to work out the moon's orbit.
+
+    SPIN: nearly every large moon is TIDALLY LOCKED. The planet's gravity
+    stretched it slightly into an egg shape, and over millions of years the
+    friction of that stretching slowed its spin until one rotation took
+    exactly one orbit. That's why we always see the same face of our Moon.
+    So spin period = orbital period, which Kepler's laws give us from the
+    moon's position and velocity relative to its planet.
+    """
+    position, velocity = fetch_state_vector(moon["horizons_id"], date)
+    physical = physical or {}
+    gm_km3 = physical.get("gm")
+    mass = gm_km3 * 1e9 / G if gm_km3 else 0.0
+
+    mu = G * (parent_body.mass + mass)
+    period = orbital_period(position - parent_body.position,
+                            velocity - parent_body.velocity, mu)
+    return Body(
+        name=moon["name"],
+        mass=mass,
+        position=position,
+        velocity=velocity,
+        is_test_particle=not gm_km3,
+        radius=(physical.get("radius_km") or 5.0) * KM,
+        rotation_period=period,  # tidally locked (see above)
+        color=MOON_COLOR,
+        parent=parent_body.name,
+    )
+
+
+def short_name(full_name):
+    """'1 Ceres (A801 AA)' -> 'Ceres' ;  '15789 (1993 SC)' -> '1993 SC' ;  '1P/Halley' -> '1P/Halley'"""
+    m = re.match(r"^\d+\s+([^(]+?)\s*(\(.*\))?$", full_name)
+    if m and m.group(1):
+        return m.group(1)
+    m = re.match(r"^\d+\s+\((.+)\)$", full_name)
+    return m.group(1) if m else full_name
+
+
+def make_small_body_from_record(record, date):
+    """
+    Build an asteroid/comet Body from a nasa_api.query_small_bodies() result.
+
+    If JPL has measured its GM (only the biggest ones, like Ceres and Vesta),
+    it gets real gravity. Otherwise it's a test particle.
+
+    How we ask Horizons for its position (both found by testing):
+      asteroid : "DES=<spkid>;"  (the plain number alone isn't accepted)
+      comet    : its designation + closest_apparition. A comet like Halley
+                 has a separate orbit solution for each return to the Sun,
+                 so we pick the one closest to our date.
+    """
+    if record["kind"] == "comet":
+        position, velocity = fetch_state_vector(
+            record["designation"], date, id_type="designation",
+            closest_apparition=True, no_fragments=True)
+        color = COMET_COLOR
+    else:
+        position, velocity = fetch_state_vector(f"DES={record['spkid']};", date)
+        color = ASTEROID_COLOR
+
+    gm_km3 = record.get("gm")
+    return Body(
+        name=short_name(record["name"]),
+        mass=gm_km3 * 1e9 / G if gm_km3 else 0.0,
+        position=position,
+        velocity=velocity,
+        is_test_particle=not gm_km3,
+        radius=(record.get("diameter_km") or 10.0) / 2 * KM,
+        rotation_period=record["rotation_hours"] * HOUR if record.get("rotation_hours") else None,
+        color=color,
+    )
+
+
+def build_system(date, planet_names, moons=None, small_body_queries=(), extra_small_bodies=()):
+    """
+    Assemble a whole simulation in one call.
+
+    planet_names       : ["Sun", "Earth", "Moon", "Jupiter", ...]  (PHYSICAL_DATA names)
+    moons              : {"Jupiter": ["Io", "Europa"], "Saturn": "measured", "Mars": "all"}
+                           a list of names -> just those moons
+                           "measured"      -> every moon JPL has a mass for
+                           "all"           -> every moon NASA tracks (Saturn: ~290!)
+    small_body_queries : list of dicts for nasa_api.query_small_bodies,
+                         e.g. [{"kind": "asteroid", "limit": 10}]
+    extra_small_bodies : [("1", "Ceres"), ...] the older hand-picked style
+
+    THE DOUBLE-COUNTING RULE: if a planet's moons are included, that planet
+    switches to its body-only position and GM (see make_body). Otherwise its
+    moons' mass would be counted twice.
+    """
+    moons = moons or {}
+    bodies = []
+    planet_gm = nasa_api.planet_gm_without_moons() if moons else {}
+    for name in planet_names:
+        has_moons_added = name in moons and name in nasa_api.PLANET_NUMBERS
+        bodies.append(make_body(name, date, planet_gm.get(name) if has_moons_added else None))
+
+    names_taken = {b.name for b in bodies}
+    if moons:
+        physical = nasa_api.moon_physical_data()
+        for planet, choice in moons.items():
+            parent = next((b for b in bodies if b.name == planet), None)
+            if parent is None:
+                raise ValueError(f"Moons of {planet} requested, but {planet} is not in planet_names")
+            available = nasa_api.list_moons(planet)
+            if choice == "all":
+                chosen = available
+            elif choice == "measured":
+                chosen = [m for m in available if (physical.get(m["horizons_id"]) or {}).get("gm")]
+            else:
+                by_name = {m["name"]: m for m in available}
+                missing = [n for n in choice if n not in by_name]
+                if missing:
+                    raise ValueError(f"{planet} has no moon called {missing}. Try nasa_api.list_moons({planet!r})")
+                chosen = [by_name[n] for n in choice]
+            for moon in chosen:
+                if moon["name"] in names_taken:  # e.g. Earth's "Moon" already listed
+                    continue
+                bodies.append(make_moon(moon, date, parent, physical.get(moon["horizons_id"])))
+                names_taken.add(moon["name"])
+
+    seen_ids = set()
+    for query in small_body_queries:
+        for record in nasa_api.query_small_bodies(**query):
+            if record["spkid"] in seen_ids:  # same object from two queries
+                continue
+            seen_ids.add(record["spkid"])
+            body = make_small_body_from_record(record, date)
+            # Names can clash across kinds: asteroid "52 Europa" vs Jupiter's
+            # moon Europa. Then use the full catalogue name instead.
+            if body.name in names_taken:
+                body.name = record["name"]
+            bodies.append(body)
+            names_taken.add(body.name)
+
+    for designation, label in extra_small_bodies:
+        if label not in names_taken:
+            bodies.append(make_small_body(designation, date, name=label))
+            names_taken.add(label)
+    return bodies
+
+
+def suggest_time_step(bodies, steps_per_orbit=100):
+    """
+    The largest SAFE time step (seconds) for these bodies.
+
+    Rule of thumb from the integrator: you want ~100 steps per orbit of the
+    FASTEST thing in the system. Fewer, and the integrator cuts corners
+    on the tight curve, and the moon spirals off or crashes.
+        Moon around Earth : 27.3 days -> dt up to ~6.5 hours
+        Io around Jupiter : 1.77 days -> dt up to ~25 minutes
+        Phobos around Mars: 7.65 hours -> dt up to ~4.6 minutes (slow to run!)
+    Returns (dt_seconds, name_of_fastest_body), or (None, None) if no body has a parent.
+    """
+    by_name = {b.name: b for b in bodies}
+    fastest, fastest_name = None, None
+    for b in bodies:
+        if not b.parent or b.parent not in by_name:
+            continue
+        p = by_name[b.parent]
+        period = orbital_period(b.position - p.position, b.velocity - p.velocity,
+                                G * (p.mass + b.mass))
+        if period and (fastest is None or period < fastest):
+            fastest, fastest_name = period, b.name
+    if fastest is None:
+        return None, None
+    return fastest / steps_per_orbit, fastest_name

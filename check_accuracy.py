@@ -28,9 +28,13 @@ The real Earth is tugged by the Moon, Venus, Jupiter and the rest, and your
 mini-universe doesn't contain them. Add them and the error drops ~10,000x.
 That shows, with numbers, that the planets really do pull on each other.
 
-The last ~50 km comes from physics this model leaves out: Einstein's
-general relativity (a tiny correction to Newton near the Sun), the
-asteroids' combined pull, Pluto, and the Sun's slightly squashed shape.
+    ...plus --asteroids 10      :         ~50 km off (no measurable change!)
+
+The last ~50 km comes from physics this model leaves out, mainly Einstein's
+general relativity (a tiny correction to Newton near the Sun; it shifts
+Earth by roughly 30 km per year). Measured: adding the 10 biggest asteroids'
+gravity changes nothing at this level. Their combined mass is about 1/2000
+of Earth's.
 """
 
 import argparse
@@ -38,7 +42,7 @@ from datetime import date, timedelta
 
 import numpy as np
 
-from data_sources import AU, DAY, PHYSICAL_DATA, fetch_state_vector, make_body
+from data_sources import AU, DAY, PHYSICAL_DATA, build_system, fetch_state_vector
 from integrator import INTEGRATORS
 from simulation import Simulation
 
@@ -50,6 +54,8 @@ def main():
     parser.add_argument("--days", type=float, default=365.0)
     parser.add_argument("--dt-hours", type=float, default=1.0)
     parser.add_argument("--integrator", choices=list(INTEGRATORS), default="verlet")
+    parser.add_argument("--asteroids", type=int, default=0,
+                        help="also include the N biggest asteroids from NASA (their gravity counts if JPL knows their mass)")
     args = parser.parse_args()
 
     for required in ("Sun", "Earth"):
@@ -58,7 +64,8 @@ def main():
 
     # ---- build the system from real NASA data --------------------------
     print(f"Fetching starting positions for {args.start} from JPL Horizons...")
-    bodies = [make_body(name, args.start) for name in args.bodies]
+    queries = [{"kind": "asteroid", "limit": args.asteroids}] if args.asteroids else []
+    bodies = build_system(args.start, args.bodies, small_body_queries=queries)
     dt = args.dt_hours * 3600.0
     sim = Simulation(bodies, dt=dt, integrator=INTEGRATORS[args.integrator])
     # NOTE: no move_to_center_of_mass() here. We compare against NASA's
@@ -94,7 +101,8 @@ def main():
     # ---- report ------------------------------------------------------------
     print()
     print("=" * 60)
-    print(f"Bodies      : {', '.join(args.bodies)}")
+    print(f"Bodies      : {', '.join(args.bodies)}"
+          + (f" + {args.asteroids} biggest asteroids" if args.asteroids else ""))
     print(f"Integrator  : {args.integrator},  dt = {args.dt_hours:g} h")
     print("-" * 60)
     print("TEST 1 - energy conservation (relative error, smaller = better)")

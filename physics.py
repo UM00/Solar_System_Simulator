@@ -111,6 +111,34 @@ def total_momentum(velocities, gravity_masses):
     return np.sum(gravity_masses[:, None] * velocities, axis=0)
 
 
+def orbital_period(rel_position, rel_velocity, mu):
+    """
+    How long one orbit takes (seconds), for a body moving around a central
+    body. Uses the position and velocity RELATIVE to that central body.
+    mu = G * (M_central + m_orbiting), m^3/s^2.
+
+    Two classic laws, in two steps:
+
+    1. VIS-VIVA (energy conservation) gives the orbit's size, the
+       semimajor axis a, from the current distance r and speed v:
+            v^2 = mu * (2/r - 1/a)   ->   a = 1 / (2/r - v^2/mu)
+       Fast for its distance = big orbit. Slow = small orbit.
+
+    2. KEPLER'S THIRD LAW gives the period from the size:
+            T = 2 * pi * sqrt(a^3 / mu)
+       Twice the orbit size -> 2.8x longer to go round.
+
+    Returns None if the body isn't on a closed orbit (it's escaping).
+    """
+    r = np.linalg.norm(rel_position)
+    v2 = np.dot(rel_velocity, rel_velocity)
+    inv_a = 2.0 / r - v2 / mu
+    if inv_a <= 0:
+        return None  # parabola/hyperbola: never comes back
+    a = 1.0 / inv_a
+    return 2.0 * np.pi * np.sqrt(a**3 / mu)
+
+
 def total_angular_momentum(positions, velocities, gravity_masses):
     """
     sum of m * (r x v). Roughly "how much the system is spinning".
