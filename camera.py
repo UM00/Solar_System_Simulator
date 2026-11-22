@@ -1,54 +1,74 @@
 """
-camera.py - a free-flying camera, like in a 3D game.
+camera.py - a free-flying "spaceship" camera with inertia.
 
 WHY THIS FILE EXISTS
 --------------------
-VPython's built-in camera always ORBITS around one point (scene.center):
-dragging swings you around that point, and scrolling moves you toward it.
-You can never just *fly somewhere*. This class replaces that with a camera
-that has its own position and its own viewing direction.
+VPython's built-in camera always ORBITS around one point (scene.center).
+This class replaces it with a camera that has its own position, its own
+viewing direction, and its own VELOCITY, so it moves like a craft in space.
 
-CONTROLS (click the 3D view first, so it receives your key presses)
--------------------------------------------------------------------
-    W / S              fly forward / backward
-    A / D              slide left / right
-    E or Space / Q     rise / sink
+CONTROLS (the 3D view must be under the mouse for the keys to register)
+-----------------------------------------------------------------------
+    W / S              thrust forward / backward
+    A / D              thrust left / right
+    E or Space / Q     thrust up / down
     Arrow keys         turn left/right, look up/down
     Hold LEFT mouse    steer: point where you want to turn. The further from
                        the centre of the screen, the faster you turn
-    Mouse wheel        fly forward / backward in steps
+    Mouse wheel        a short burst of forward/backward thrust
+                       (ui_theme.py turns each wheel click into a brief
+                       PageUp/PageDown press, and those keys also work)
     Shift (hold)       5x faster
 
-HOW A CAMERA DIRECTION IS STORED: YAW AND PITCH
------------------------------------------------
-Instead of storing an arrow directly, we store two angles, like a person:
+INERTIA: WHY IT FEELS LIKE SPACE
+--------------------------------
+A real spacecraft doesn't start or stop instantly. Here the keys don't set
+the camera's position directly. They set a TARGET velocity, and the actual
+velocity eases toward it a bit every frame:
+
+    velocity += (target_velocity - velocity) * (1 - exp(-dt / glide))
+
+`glide` is a time in seconds (the "Camera glide" slider). After one glide
+time the velocity has covered 63% of the gap; after three, 95%. That's
+EXPONENTIAL SMOOTHING, a "damped" motion. Let go of the keys and the camera
+coasts to a stop instead of halting dead. Turning works the same way with an
+angular velocity. Using exp(-dt / glide) instead of a fixed fraction keeps
+the feel the same even if the frame rate changes.
+
+(Strictly, a frictionless spacecraft would coast forever. Pure Newtonian
+flight is very hard to steer, so the gentle damping is a deliberate
+compromise that most space games make.)
+
+HOW A DIRECTION IS STORED: YAW AND PITCH
+----------------------------------------
     yaw   = how far you've turned left/right (turning your whole body)
     pitch = how far you're looking up/down (tilting your head)
-From these two angles we build three arrows each frame:
-    forward = where you're looking
-    right   = to your right-hand side
-    up      = above your head
-Moving with W/A/S/D just means "move along one of these arrows".
-Pitch is limited to just under 90 degrees. Looking EXACTLY straight up
-makes "right" undefined (any direction is perpendicular), and the view
-would flip. Every 3D game does the same.
+From these two angles we build three arrows each frame: forward, right
+(= forward x up, right-hand rule) and up. Thrust moves along those arrows.
+Pitch stops just short of 90 degrees: looking EXACTLY straight up makes
+"right" undefined and the view would flip.
 
 AUTOMATIC SPEED
 ---------------
-The Solar System has sizes from 0.1 units (the Moon, on screen) to 300
-units (Neptune's orbit). One fixed flying speed would be too slow out
-there or uncontrollable near a planet. So speed scales with the distance to
-the NEAREST object: near Earth you creep, in deep space you race.
-Space-exploration programs like Celestia and SpaceEngine use this trick.
+Sizes on screen range from 0.1 units (the Moon) to 300 units (Neptune's
+orbit), so top speed scales with the distance to the NEAREST object: you
+creep near a planet and race through empty space (as in Celestia and
+SpaceEngine).
+
+SMOOTH FLIGHTS ("Follow" and "Overview")
+----------------------------------------
+Picking a body to follow, or pressing Overview, doesn't teleport you. It
+starts a FLIGHT: each frame the camera covers a fraction of the remaining
+distance (the same exponential smoothing), so it speeds away, then slows
+gently into place while turning to face the target. Touch any flying
+control and you take over immediately.
 
 VPYTHON DETAIL: THE CLIPPING TRAP
 ---------------------------------
 VPython only draws things between distance/100 and distance*10 from the
-camera, where "distance" is how far away scene.center (the look point) is.
-(Found in VPython's own code: zNear = distance/100, zFar = distance*10.)
-So we place the look point 10x the distance of the nearest object ahead:
-    nearest object at 1 unit -> drawn from 0.1 to 100 units away.
-That keeps the nearby planet un-clipped while distant planets stay visible.
+camera, where "distance" is how far away scene.center (the look point) is
+(from VPython's code: zNear = distance/100, zFar = distance*10). So the look
+point sits 10x the nearest object's distance ahead of the camera.
 """
 
 import math
@@ -56,90 +76,128 @@ import math
 from vpython import cross, keysdown, mag, norm, vector
 
 WORLD_UP = vector(0, 1, 0)        # VPython's screen "up" = ecliptic north
-MAX_PITCH = math.radians(89.0)    # just short of straight up/down
-TURN_SPEED = math.radians(70.0)   # arrow keys: degrees per second
-STEER_GAIN = 2.5                  # mouse steering: turn rate per radian of pointer offset
-STEER_DEADZONE = 0.02             # radians; ignore tiny offsets so you can hold still
+MAX_PITCH = math.radians(89.0)
+TURN_SPEED = math.radians(55.0)   # arrow keys: degrees per second at full turn
+TURN_SMOOTHING = 0.20             # seconds; how quickly turning starts/stops
+STEER_GAIN = 2.0                  # mouse steering: turn rate per radian of pointer offset
+STEER_DEADZONE = 0.03             # radians; ignore tiny offsets so you can hold still
 SHIFT_BOOST = 5.0
+# PageUp/PageDown (mouse wheel) thrust. Keep it modest: speed is proportional
+# to the distance from the nearest object, so flying AWAY speeds you up, which
+# takes you further away, which speeds you up more. That's EXPONENTIAL growth
+# (like compound interest). In testing, a boost of 6 turned one second of
+# scrolling back into a trip thousands of times further out, and 2.5 still
+# moved ~1.85x per click. Each wheel click moves you roughly a fixed RATIO
+# closer or further, like the steps of a zoom; at 1.5 it measured ~1.55x per click.
+WHEEL_BOOST = 1.5
 MIN_SPEED_DISTANCE = 0.02         # never slower than this, even touching a planet
-LOOK_DISTANCE_FACTOR = 10.0       # look point = 10 x nearest-object distance (see above)
+LOOK_DISTANCE_FACTOR = 10.0       # look point = 10 x nearest-object distance
+FLIGHT_TIME = 0.55                # seconds; smoothing time of Follow/Overview flights
+
+MOVE_KEYS = {"w", "s", "a", "d", "e", "q", " ", "pageup", "pagedown"}
+TURN_KEYS = {"left", "right", "up", "down"}
+
+
+def _ease(dt, tau):
+    """Fraction of the remaining gap to close this frame (exponential smoothing)."""
+    return 1.0 - math.exp(-dt / tau) if tau > 0 else 1.0
+
+
+def _wrap(angle):
+    """Wrap an angle into [-pi, pi), so we always turn the short way round."""
+    return (angle + math.pi) % (2 * math.pi) - math.pi
 
 
 class FlyCamera:
     def __init__(self, scene):
         self.scene = scene
 
-        # Switch off VPython's built-in orbit camera. We control it ourselves.
+        # Switch off VPython's built-in orbit camera; we control it ourselves.
         scene.autoscale = False
         scene.userspin = False
         scene.userpan = False
-        # The wheel stays ON. VPython turns it into a zoom, and we turn that
-        # zoom into flying forward/backward (see _absorb_wheel).
-        scene.userzoom = True
+        scene.userzoom = False   # the wheel becomes thrust instead (see ui_theme.py)
         scene.up = WORLD_UP
 
         self.pos = vector(0, 0, 10)
-        self.yaw = -math.pi / 2       # facing -z
+        self.yaw = -math.pi / 2
         self.pitch = 0.0
-        self.speed_factor = 1.0       # set by the flight-speed slider
-        self.steering = False         # True while the left mouse button is held
+        self.vel = vector(0, 0, 0)   # screen units per second
+        self.yaw_rate = 0.0          # radians per second
+        self.pitch_rate = 0.0
 
-        self.target = None            # sphere we're following, or None
+        self.speed_factor = 1.0      # flight-speed slider
+        self.glide = 0.45            # seconds; camera-glide slider
+        self.steering = False        # left mouse button held
+
+        self.target = None           # sphere we ride along with
         self._target_last_pos = None
+        self._flight = None          # an in-progress smooth flight, or None
         self._home = (vector(0, 0, 10), vector(0, 0, 0))
 
-        self._look_distance = 1.0
-        self._sent_ranges = []        # recent ranges WE sent (to tell them apart from wheel zooms)
-        self._force_resend = False
+        self.look_distance = 1.0
+        self._range_sent = False
         self._last_forward = None
 
         scene.bind("mousedown", self._mouse_down)
         scene.bind("mouseup", self._mouse_up)
-        scene.bind("mouseleave", self._mouse_up)  # releasing outside the view must stop steering too
+        scene.bind("mouseleave", self._mouse_up)  # releasing outside the view stops steering too
 
     # ------------------------------------------------------------ directions
     def forward(self):
-        """Unit arrow pointing where the camera looks, built from yaw and pitch."""
         cp = math.cos(self.pitch)
         return vector(cp * math.cos(self.yaw), math.sin(self.pitch), cp * math.sin(self.yaw))
 
     def right(self):
-        # forward x up = the arrow pointing to your right (right-hand rule)
         return norm(cross(self.forward(), WORLD_UP))
 
     def up(self):
         return cross(self.right(), self.forward())
 
     # ------------------------------------------------------------ placement
-    def look_at(self, point):
-        """Turn (without moving) to face a point."""
+    def _angles_towards(self, point):
         d = point - self.pos
         if mag(d) == 0:
-            return
+            return self.yaw, self.pitch
         d = norm(d)
-        self.pitch = max(-MAX_PITCH, min(MAX_PITCH, math.asin(d.y)))
-        self.yaw = math.atan2(d.z, d.x)
+        return math.atan2(d.z, d.x), max(-MAX_PITCH, min(MAX_PITCH, math.asin(d.y)))
+
+    def look_at(self, point):
+        """Turn instantly to face a point."""
+        self.yaw, self.pitch = self._angles_towards(point)
 
     def set_home(self, pos, look_at):
         self._home = (vector(pos), vector(look_at))
 
-    def go_home(self):
-        """Back to the overview position, in free flight."""
+    def jump_home(self):
+        """Instantly to the overview (used once at start-up)."""
         self.target = None
+        self._flight = None
         self.pos = vector(self._home[0])
         self.look_at(self._home[1])
 
+    def go_home(self):
+        """Smooth flight back to the overview, in free flight."""
+        self.target = None
+        self._start_flight(goal=self._home[0], look=self._home[1])
+
     def follow(self, sphere):
-        """
-        Fly to a body and ride along with it. You can still fly around it
-        with the keys: following only adds the body's own motion to yours.
-        """
+        """Smooth flight to a body, then ride along with it."""
         self.target = sphere
         self._target_last_pos = vector(sphere.pos)
-        # Park at 8 radii away, slightly above, looking at it.
-        offset = (-self.forward() * 8 + WORLD_UP * 2) * sphere.radius
-        self.pos = sphere.pos + offset
-        self.look_at(sphere.pos)
+        # Park 8 radii away (from the current side), slightly above, looking at it.
+        approach = norm(self.pos - sphere.pos) if mag(self.pos - sphere.pos) > 0 else -self.forward()
+        offset = (approach * 8 + WORLD_UP * 2.5) * sphere.radius
+        self._start_flight(offset=offset)
+
+    def stop_following(self):
+        self.target = None
+        self._flight = None
+
+    def _start_flight(self, goal=None, look=None, offset=None):
+        self.vel = vector(0, 0, 0)
+        self.yaw_rate = self.pitch_rate = 0.0
+        self._flight = {"goal": goal, "look": look, "offset": offset}
 
     # ------------------------------------------------------------ mouse
     def _mouse_down(self, _evt):
@@ -149,13 +207,7 @@ class FlyCamera:
         self.steering = False
 
     def _pointer_offset(self):
-        """
-        How far the mouse pointer is from the centre of the screen, as two
-        angles (radians): (to the right, upward).
-        VPython gives the mouse as a RAY: an arrow from the camera through
-        the pointer. Comparing it with our forward/right/up arrows gives
-        the angles.
-        """
+        """Pointer's angle from the screen centre (radians): (to the right, upward)."""
         ray = self.scene.mouse.ray
         f, r, u = self.forward(), self.right(), self.up()
         ahead = ray.dot(f)
@@ -165,51 +217,76 @@ class FlyCamera:
 
     # ------------------------------------------------------------ per frame
     def update(self, dt, spheres):
-        """Call once per animation frame. dt = real seconds since last frame."""
+        """Call once per animation frame. dt = real seconds since the last frame."""
         nearest = self._nearest_surface_distance(spheres)
+        keys = {k.lower() for k in keysdown()}
 
-        # 1. FOLLOWING: move by however much the target moved since last frame.
+        # 1. Ride along with the followed body.
         if self.target is not None:
             self.pos += self.target.pos - self._target_last_pos
             self._target_last_pos = vector(self.target.pos)
 
-        keys = {k.lower() for k in keysdown()}
+        # Any flying input cancels an automatic flight: you take the controls.
+        if self._flight and (keys & (MOVE_KEYS | TURN_KEYS) or self.steering):
+            self._flight = None
 
-        # 2. TURNING with the arrow keys
-        self.yaw += TURN_SPEED * dt * (("right" in keys) - ("left" in keys))
-        self.pitch += TURN_SPEED * dt * (("up" in keys) - ("down" in keys))
-
-        # 3. STEERING with the mouse: the turn RATE depends on how far the
-        #    pointer is from the centre. (Turning by "how far the mouse moved"
-        #    would be nicer, but VPython reports the mouse a frame or two late,
-        #    which makes that jittery. Rate steering is immune to the delay.)
+        # 2. Turning: a target turn rate, smoothed into the actual turn rate.
+        want_yaw = TURN_SPEED * (("right" in keys) - ("left" in keys))
+        want_pitch = TURN_SPEED * (("up" in keys) - ("down" in keys))
         if self.steering:
             sx, sy = self._pointer_offset()
             if abs(sx) > STEER_DEADZONE:
-                self.yaw += STEER_GAIN * sx * dt
+                want_yaw += STEER_GAIN * sx
             if abs(sy) > STEER_DEADZONE:
-                self.pitch += STEER_GAIN * sy * dt
+                want_pitch += STEER_GAIN * sy
+        k = _ease(dt, TURN_SMOOTHING)
+        self.yaw_rate += (want_yaw - self.yaw_rate) * k
+        self.pitch_rate += (want_pitch - self.pitch_rate) * k
+        self.yaw += self.yaw_rate * dt
+        self.pitch += self.pitch_rate * dt
 
-        self.pitch = max(-MAX_PITCH, min(MAX_PITCH, self.pitch))
-
-        # 4. MOVING with W/A/S/D/E/Q, speed scaled by the nearest distance
+        # 3. Thrust: a target velocity, smoothed into the actual velocity (inertia).
         f, r = self.forward(), self.right()
         direction = (
-            f * (("w" in keys) - ("s" in keys))
+            f * (("w" in keys) - ("s" in keys) + WHEEL_BOOST * (("pageup" in keys) - ("pagedown" in keys)))
             + r * (("d" in keys) - ("a" in keys))
             + WORLD_UP * ((("e" in keys) or (" " in keys)) - ("q" in keys))
         )
-        if mag(direction) > 0:
-            speed = self.speed_factor * max(nearest, MIN_SPEED_DISTANCE)
-            if "shift" in keys:
-                speed *= SHIFT_BOOST
-            self.pos += norm(direction) * speed * dt
+        top_speed = self.speed_factor * max(nearest, MIN_SPEED_DISTANCE)
+        if "shift" in keys:
+            top_speed *= SHIFT_BOOST
+        want_vel = direction * top_speed  # (length > 1 only for wheel bursts)
+        self.vel += (want_vel - self.vel) * _ease(dt, self.glide)
+        # Never let a coast carry us through a planet in one frame.
+        step = self.vel * dt
+        if mag(step) > 0.5 * nearest:
+            step = norm(step) * 0.5 * nearest
+        self.pos += step
 
-        # 5. MOUSE WHEEL -> fly forward/back
-        self._absorb_wheel(nearest)
+        # 4. Automatic flight (Follow / Overview), if one is running.
+        if self._flight:
+            self._fly(dt)
 
-        # 6. Tell VPython where the camera is
+        self.pitch = max(-MAX_PITCH, min(MAX_PITCH, self.pitch))
         self._apply(nearest)
+
+    def _fly(self, dt):
+        fl = self._flight
+        if fl["offset"] is not None and self.target is not None:
+            goal = self.target.pos + fl["offset"]
+            look = self.target.pos
+        else:
+            goal, look = fl["goal"], fl["look"]
+        remaining = goal - self.pos
+        self.pos += remaining * _ease(dt, FLIGHT_TIME)
+        want_yaw, want_pitch = self._angles_towards(look)
+        a = _ease(dt, FLIGHT_TIME * 0.6)
+        self.yaw += _wrap(want_yaw - self.yaw) * a
+        self.pitch += (want_pitch - self.pitch) * a
+        # Done when within 0.5% of the way, so tiny leftovers don't linger forever.
+        scale = mag(fl["offset"]) if fl["offset"] is not None else max(mag(goal), 1e-9)
+        if mag(remaining) < 0.005 * scale and abs(_wrap(want_yaw - self.yaw)) < 0.01:
+            self._flight = None
 
     # ------------------------------------------------------------ helpers
     def _nearest_surface_distance(self, spheres):
@@ -218,45 +295,22 @@ class FlyCamera:
             best = min(best, mag(s.pos - self.pos) - s.radius)
         return max(best, 1e-3)
 
-    def _absorb_wheel(self, nearest):
-        """
-        The wheel makes VPython shrink or grow scene.range, which moves its
-        camera toward or away from the look point. We spot a range that we
-        did NOT send ourselves, copy the same move into our own position,
-        and the next _apply() puts the range back to normal.
-        """
-        current = self.scene.range
-        if not self._sent_ranges:
-            return
-        if any(abs(current - r) <= 1e-9 * r for r in self._sent_ranges):
-            return  # it's one of ours, so no wheel movement
-        ratio = current / self._sent_ranges[-1]
-        step = self._look_distance * (1.0 - ratio)  # >0 = wheel toward you = fly forward
-        step = min(step, 0.5 * nearest)            # never jump through a planet
-        self.pos += self.forward() * step
-        self._sent_ranges.append(current)         # don't count this same zoom twice
-        self._force_resend = True                 # make _apply put the range back
-
     def _apply(self, nearest):
-        # Pick the look-point distance from the nearest object (the clipping
-        # trap above), but only change it when it's off by more than 5%.
-        # Every change resends scene.range, and fewer resends make wheel
-        # zooms easier to recognise.
+        """Tell VPython where the camera is (see the clipping trap above)."""
         wanted = max(LOOK_DISTANCE_FACTOR * nearest, 0.05)
-        resend = (self._force_resend or not self._sent_ranges
-                  or abs(wanted - self._look_distance) > 0.05 * self._look_distance)
-        self._force_resend = False
+        # Only change the look distance when it's off by more than 5%:
+        # each change resends scene.range, so fewer changes = less traffic.
+        resend = not self._range_sent or abs(wanted - self.look_distance) > 0.05 * self.look_distance
         if resend:
-            self._look_distance = wanted
+            self.look_distance = wanted
 
         f = self.forward()
         if self._last_forward is None or mag(f - self._last_forward) > 1e-12:
             self.scene.forward = f
             self._last_forward = f
-        # VPython puts its camera at:  center - forward * range / tan(fov/2).
+        # VPython puts its camera at: center - forward * range / tan(fov/2).
         # Setting center and range like this puts it exactly at self.pos.
-        self.scene.center = self.pos + f * self._look_distance
+        self.scene.center = self.pos + f * self.look_distance
         if resend:
-            new_range = self._look_distance * math.tan(self.scene.fov / 2)
-            self.scene.range = new_range
-            self._sent_ranges = (self._sent_ranges + [new_range])[-8:]
+            self.scene.range = self.look_distance * math.tan(self.scene.fov / 2)
+            self._range_sent = True

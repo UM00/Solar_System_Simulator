@@ -83,7 +83,7 @@
   <p>This document explains everything in this project: what each file does, the physics behind every
   line, and why it's built the way it is. It's also a general introduction to how solar system
   simulators work. You should be able to read it start to finish and then build one of your own.</p>
-  <p><b>Built:</b> 2026-11-20 13:19 &nbsp;·&nbsp; <b>Code version:</b> git commit <code>6cc68fd</code> (plus uncommitted changes)</p><table class='small'><tr><th>File</th><th>Lines</th></tr><tr><td><code>body.py</code></td><td>70</td></tr><tr><td><code>camera.py</code></td><td>262</td></tr><tr><td><code>check_accuracy.py</code></td><td>119</td></tr><tr><td><code>data_sources.py</code></td><td>390</td></tr><tr><td><code>integrator.py</code></td><td>69</td></tr><tr><td><code>main.py</code></td><td>86</td></tr><tr><td><code>nasa_api.py</code></td><td>362</td></tr><tr><td><code>physics.py</code></td><td>148</td></tr><tr><td><code>simulation.py</code></td><td>116</td></tr><tr><td><code>visualize.py</code></td><td>286</td></tr></table>
+  <p><b>Built:</b> 2026-11-22 17:50 &nbsp;·&nbsp; <b>Code version:</b> git commit <code>4c8ee58</code> (plus uncommitted changes)</p><table class='small'><tr><th>File</th><th>Lines</th></tr><tr><td><code>body.py</code></td><td>70</td></tr><tr><td><code>camera.py</code></td><td>316</td></tr><tr><td><code>check_accuracy.py</code></td><td>119</td></tr><tr><td><code>data_sources.py</code></td><td>390</td></tr><tr><td><code>integrator.py</code></td><td>69</td></tr><tr><td><code>main.py</code></td><td>86</td></tr><tr><td><code>nasa_api.py</code></td><td>362</td></tr><tr><td><code>physics.py</code></td><td>148</td></tr><tr><td><code>simulation.py</code></td><td>116</td></tr><tr><td><code>starfield.py</code></td><td>92</td></tr><tr><td><code>trails.py</code></td><td>140</td></tr><tr><td><code>ui_theme.py</code></td><td>199</td></tr><tr><td><code>visualize.py</code></td><td>345</td></tr></table>
   <p class="muted" style="font-size:9pt">The source of this PDF is <code>docs/source/guide.html</code>. Rebuild with
   <code>python docs/build_docs.py</code>. Appendix A (code reference) and Appendix B (current settings) are generated
   from the code at build time, so they always match the code.</p>
@@ -765,12 +765,26 @@ creation: it converts vectors to float arrays and rejects bad input early (wrong
 dictionary so they can be chosen by name.</p>
 
 <h3><code>visualize.py</code>: the 3D view</h3>
-<p><code>SolarSystemView</code> creates one VPython sphere per body (with tilt, texture, trail and label), the controls (pause,
-follow menu, overview, time-speed and flight-speed sliders) and the animation loop <code>run()</code>. Details in Section 28.</p>
+<p><code>SolarSystemView</code> creates one VPython sphere per body (with tilt, texture and label), the HUD, the sidebar controls
+(pause, time speed, follow menu, overview, flight speed, camera glide, trail and display switches) and the animation loop
+<code>run()</code>. It hands the specialised jobs to the four files below. Details in Section 28.</p>
 
 <h3><code>camera.py</code>: the free-flying camera</h3>
-<p><code>FlyCamera</code> stores its own position, <i>yaw</i> and <i>pitch</i>, reads the keyboard and mouse each frame, and positions
-VPython's camera. Details in Section 29.</p>
+<p><code>FlyCamera</code> stores its own position, <i>yaw</i>, <i>pitch</i>, <b>velocity</b> and <b>turn rates</b>, turns key presses into
+smoothed thrust (inertia), runs smooth Follow/Overview flights, and positions VPython's camera. Details in Section 29.</p>
+
+<h3><code>trails.py</code>: orbit trails</h3>
+<p><code>OrbitTrails</code> records each body's drawn position about 180 times per orbit and removes points older than
+<b>2 orbital periods</b> (periods from Kepler's third law), or keeps the full history when switched on. It also keeps every trail about
+1.5 pixels wide (Section 28).</p>
+
+<h3><code>starfield.py</code>: background stars</h3>
+<p><code>StarField</code> builds 1,500 tiny glowing boxes, 40% of them in a Milky-Way band, as one compound object that travels with
+the camera (a "skybox", Section 28).</p>
+
+<h3><code>ui_theme.py</code>: the page layout</h3>
+<p>One block of CSS and JavaScript sent through VPython's caption. It makes the 3D view fill the window, turns the caption into the
+slide-out sidebar and the title into the HUD, and turns the mouse wheel into thrust (Sections 28–29).</p>
 
 <h3><code>check_accuracy.py</code>: proving it's right</h3>
 <p>Runs a simulation with no graphics, tracks energy, then compares Earth's position (relative to the Sun) with NASA's after
@@ -790,9 +804,13 @@ code that changed since the guide was last built.</p>
    │             3. accelerations()  ◄── gravity: who pulls whom, how hard
    │             4. kick  (other half)
    │           clock += dt
-   ├─► _redraw()        move spheres, spin them, move labels, update the date
-   ├─► camera.update()  read keys/mouse, fly, place VPython's camera
-   └─► rate(60)         wait so we draw at most 60 frames per second</pre>
+   ├─► _redraw()               move spheres, spin them, move labels
+   ├─► trails.update()         add a trail point if due; drop points older than 2 orbits
+   ├─► camera.update()         read keys/mouse, smooth thrust and turning, place VPython's camera
+   ├─► stars.follow()          re-centre the star sphere on the camera
+   ├─► trails.update_widths()  keep each trail ~1.5 px wide (every 6th frame)
+   ├─► _update_hud()           date, speed, what you're following
+   └─► rate(60)                wait so we draw at most 60 frames per second</pre>
 <p><b>Time debt:</b> each frame adds <i>days_per_second × 1 day / 60</i> to a "debt" and pays it off in whole steps of <i>dt</i>.
 The remainder carries over, so even very slow speeds (less than one step per frame) run at the correct average rate. Simulation
 time and screen time are separate clocks, and this is the link between them.</p>
@@ -813,25 +831,79 @@ Every planetarium cheats, and so do we, <b>only when drawing</b>:</p>
 capped so it doesn't swallow Mercury. There's a minimum size so 20 km moons stay visible.</li>
 <li><b>Moons:</b> drawn 30× farther from their planet than reality, or they'd hide inside the enlarged planet.</li>
 </ul>
-<h3>Light, spin, tilt, trails</h3>
+<h3>Light, spin, tilt</h3>
 <ul>
 <li>The default lights are removed and a single light is placed at the Sun, so every body has a real <b>day and night side</b>.</li>
 <li>Each sphere is tilted once by its axial tilt, then each frame turned by <i>2π × elapsed / rotation period</i> about that axis.
 VPython's <code>rotate()</code> uses the right-hand rule, so positive angles are counter-clockwise seen from the north, which is how Earth spins.</li>
-<li>Trails keep the last 4000 points, one every 2 frames. At high speed, fast moons' trails look zig-zagged because each frame
-covers a big part of their orbit.</li>
+</ul>
+
+<h3>The page: full window, HUD and sidebar</h3>
+<p>VPython draws everything in a browser tab with three parts: a title above the 3D view, the view, and a caption below it.
+<code>ui_theme.py</code> sends one block of CSS and JavaScript through the caption (VPython inserts caption text with jQuery's
+<code>.append()</code>, which also runs scripts). The script stretches the 3D canvas and its transparent label overlay to the window,
+turns the <b>caption into a sidebar</b> that slides in from the right (☰ button or <kbd>H</kbd>; <kbd>Esc</kbd> closes it), and turns the
+<b>title into a HUD</b> in the top-left corner (date, speed, followed body). Two discoveries from testing the live page: VPython copies the
+title and caption into new <code>&lt;div&gt;</code>s (so those are what get styled), and it also creates a hidden default canvas (so the
+script picks the canvas that's actually on the page). After you click a slider, the script hands the keyboard back to the page, or the
+arrow keys would move the slider instead of the camera.</p>
+
+<h3>The starfield: a skybox</h3>
+<p>Real stars are so far away that crossing the whole Solar System doesn't shift them (no parallax: the nearest star is ~270,000 AU away).
+<code>starfield.py</code> fakes this with a <b>skybox</b>: a sphere of 1,500 tiny glowing dots that is always <b>centred on the camera</b>, so
+it travels with you and the stars never get closer, but turning shows different stars. About 40% of the dots are pulled toward a plane
+tilted 60° to the ecliptic, roughly the real angle of the <b>Milky Way</b> band (our galaxy is a flat disc and we're inside it). Because of the
+clipping trap (Section 29) the sphere's radius is kept at 4× the camera's look distance and rescaled when that changes. All dots are one
+compound object, so moving them costs one update per frame.</p>
+
+<h3>Trails: two orbits, or the full history</h3>
+<p>Each body leaves a trail. By default it shows only the <b>last two orbits</b>, so the view never turns into a scribble. Tick <b>Full trail
+history</b> in the sidebar to keep everything (up to 20,000 points per body). <b>Show trails</b> and <b>Clear trails</b> are there too.</p>
+<ul>
+<li><b>Two orbits, not N points.</b> A fixed number of points covers very different amounts of <i>time</i> at different speeds. At
+10 days/s Io circles Jupiter in about 10 frames, so 360 points would be ~36 orbits. So every point stores the <i>simulated time</i> it was
+recorded, and points older than <b>2 × the body's orbital period</b> are removed.</li>
+<li><b>Periods from Kepler's third law.</b> <code>orbital_period()</code> (Section 7) gives each period from the body's position and velocity
+relative to what it orbits: the parent planet for moons, the Sun for everything else. Measured: Earth 364.8 days, Moon 27.29, Io 1.77.
+A test at 0.5, 10 and 100 days/s kept 1.9–2.0 orbits every time.</li>
+<li><b>Thin at any distance.</b> A VPython <code>curve</code> is a 3D tube, so perspective makes a fixed thickness look fat up close and
+invisible far away. (Two dead ends found in testing: <code>radius=0</code> picks a thickness from the view size, and <code>points</code> measure
+"pixels" at the look point's distance, not at each dot.) The fix is perspective in reverse: something at distance <i>d</i> looks
+<i>size / d</i> big, so each trail's radius is set to <b>0.0018 × its body's distance from the camera</b>, giving about 1.5 pixels around the body.
+Trails glow (emissive), so the Sun's lighting doesn't darken them.</li>
 </ul>
 
 <h2 id="s29">29. The free-flying camera</h2>
-<p>VPython's built-in camera always <b>orbits a fixed point</b>. <code>camera.py</code> replaces it with a game-style camera.</p>
+<p>VPython's built-in camera always <b>orbits a fixed point</b>. <code>camera.py</code> replaces it with a spaceship-style camera.</p>
 <table>
   <tr><th>Control</th><th>Action</th></tr>
-  <tr><td>W / S, A / D, E (or Space) / Q</td><td>Forward/back, left/right, up/down</td></tr>
+  <tr><td>W / S, A / D, E (or Space) / Q</td><td>Thrust forward/back, left/right, up/down</td></tr>
   <tr><td>Arrow keys</td><td>Turn left/right, look up/down</td></tr>
   <tr><td>Hold left mouse</td><td>Steer toward the pointer (further from centre = faster turn)</td></tr>
-  <tr><td>Mouse wheel, Shift</td><td>Hop forward/back; 5× faster</td></tr>
-  <tr><td>Follow menu, Overview button</td><td>Ride along with any body; jump back to the full view</td></tr>
+  <tr><td>Mouse wheel (or PageUp/PageDown), Shift</td><td>A short glide forward/back (~1.55× closer/farther per click); 5× faster</td></tr>
+  <tr><td>Follow menu, Overview button</td><td>Smooth flight to any body and ride along with it; smooth flight back to the full view</td></tr>
+  <tr><td>Flight speed, Camera glide sliders</td><td>0.1–10× top speed; how long the camera takes to speed up and coast to a stop</td></tr>
 </table>
+
+<h3>Inertia: why it feels like space</h3>
+<p>A spacecraft doesn't start or stop instantly. The keys don't move the camera directly. They set a <b>target velocity</b>, and the
+actual velocity closes part of the gap every frame:</p>
+<div class="eq">v ← v + (v<sub>target</sub> − v) × (1 − e<sup>−dt / τ</sup>)
+<span class="where">τ = "Camera glide" (default 0.45 s) · after τ the gap has closed 63%, after 3τ 95%</span></div>
+<p>This is <b>exponential smoothing</b>, a <i>damped</i> motion. You accelerate gently, and when you let go you <b>coast to a stop</b>
+instead of halting dead. Using <i>e</i><sup>−dt/τ</sup> instead of a fixed fraction per frame keeps the feel the same even if the frame rate
+changes. Turning works the same way with a smoothed turn rate (τ = 0.2 s), and Follow/Overview flights cover a fraction of the remaining
+distance each frame (τ = 0.55 s), so they speed away and then ease gently into place. A truly frictionless craft would coast forever, which
+is very hard to steer, so the gentle damping is a deliberate compromise most space games make.</p>
+<div class="callout warn"><span class="callout-title">A lesson in exponential growth (found in testing)</span>
+Top speed is proportional to the distance to the nearest object. So flying <i>away</i> raises your speed, which carries you farther, which
+raises it again: the distance grows <b>exponentially</b>, like compound interest. With a strong wheel boost, one second of scrolling back
+flew the camera thousands of times farther out. The fix was a gentler wheel (boost 1.5). Each click then multiplies the distance by a
+roughly fixed <i>ratio</i> (measured: ~1.55×), which is exactly how a zoom should feel. Flying <i>toward</i> a planet is the mirror image: the
+distance shrinks exponentially, so you slow down as you arrive and never overshoot. A per-frame limit (at most half the gap to the nearest
+object) guarantees you can't pass through a planet in one frame.</div>
+
+<h3>How the camera works</h3>
 <ul>
 <li><b>Yaw and pitch:</b> the direction is stored as two angles (turning the body, tilting the head). Each frame they become three
 arrows, <i>forward</i>, <i>right</i> (forward × up) and <i>up</i>, and the keys move along them. Pitch stops at 89° because straight up makes
@@ -906,8 +978,11 @@ Which single planet matters most for Earth? When your prediction is wrong, find 
   <tr><th>Symptom</th><th>Cause and fix</th></tr>
   <tr><td><code>No module named 'pkg_resources'</code></td><td>vpython 7.6.5 needs setuptools &lt; 81: <code>pip install "setuptools&lt;81"</code> (pinned in requirements.txt)</td></tr>
   <tr><td>pip "long path" errors on Windows</td><td>Paths over 260 characters. Keep the project in a short folder, or enable Windows long paths</td></tr>
-  <tr><td>Keys don't move the camera</td><td>Click the 3D view first so it has keyboard focus</td></tr>
-  <tr><td>Arrow keys or Space scroll the page</td><td>The page is bigger than the window. Enlarge the window or use E/Q</td></tr>
+  <tr><td>Keys don't move the camera</td><td>Move the mouse over the 3D view once (VPython only reports keys after the mouse has been over it).
+  If a slider still has focus, click the view</td></tr>
+  <tr><td>Can't find the controls</td><td>Press <kbd>H</kbd> or click ☰ in the top-right corner. <kbd>Esc</kbd> hides the panel</td></tr>
+  <tr><td>Camera drifts after letting go</td><td>That's the inertia. Lower "Camera glide" in the sidebar for a snappier stop</td></tr>
+  <tr><td>Trails look messy</td><td>Untick "Full trail history" (keeps 2 orbits), or press "Clear trails"</td></tr>
   <tr><td>Animation slow with many bodies</td><td>Fewer asteroids/moons, or lower the time speed. Fast moons (Phobos) force tiny steps</td></tr>
   <tr><td>A moon flies away or crashes</td><td><i>dt</i> too large for its orbit; keep <code>suggest_time_step()</code> enabled</td></tr>
   <tr><td>NASA data looks stale / offline errors</td><td>Delete <code>data/horizons_cache.json</code> and <code>data/nasa_cache/</code> and re-run with internet</td></tr>
@@ -958,17 +1033,19 @@ Private helpers (names starting with "_") are left out.</p>
 <p class='refsummary'>body.py - the one data type every object in the simulator shares.</p>
 <div class='ref'><code class='sig'>class Body</code><div class='refdoc'></div></div>
 <h3 class='refmod'>camera.py</h3>
-<p class='refsummary'>camera.py - a free-flying camera, like in a 3D game.</p>
+<p class='refsummary'>camera.py - a free-flying "spaceship" camera with inertia.</p>
 <div class='ref'><code class='sig'>class FlyCamera</code><div class='refdoc'></div></div>
 <div class='ref'><code class='sig'>FlyCamera.__init__(self, scene)</code></div>
-<div class='ref'><code class='sig'>FlyCamera.forward(self)</code><div class='refdoc'>Unit arrow pointing where the camera looks, built from yaw and pitch.</div></div>
+<div class='ref'><code class='sig'>FlyCamera.forward(self)</code></div>
 <div class='ref'><code class='sig'>FlyCamera.right(self)</code></div>
 <div class='ref'><code class='sig'>FlyCamera.up(self)</code></div>
-<div class='ref'><code class='sig'>FlyCamera.look_at(self, point)</code><div class='refdoc'>Turn (without moving) to face a point.</div></div>
+<div class='ref'><code class='sig'>FlyCamera.look_at(self, point)</code><div class='refdoc'>Turn instantly to face a point.</div></div>
 <div class='ref'><code class='sig'>FlyCamera.set_home(self, pos, look_at)</code></div>
-<div class='ref'><code class='sig'>FlyCamera.go_home(self)</code><div class='refdoc'>Back to the overview position, in free flight.</div></div>
-<div class='ref'><code class='sig'>FlyCamera.follow(self, sphere)</code><div class='refdoc'>Fly to a body and ride along with it. You can still fly around it with the keys: following only adds the body's own motion to yours.</div></div>
-<div class='ref'><code class='sig'>FlyCamera.update(self, dt, spheres)</code><div class='refdoc'>Call once per animation frame. dt = real seconds since last frame.</div></div>
+<div class='ref'><code class='sig'>FlyCamera.jump_home(self)</code><div class='refdoc'>Instantly to the overview (used once at start-up).</div></div>
+<div class='ref'><code class='sig'>FlyCamera.go_home(self)</code><div class='refdoc'>Smooth flight back to the overview, in free flight.</div></div>
+<div class='ref'><code class='sig'>FlyCamera.follow(self, sphere)</code><div class='refdoc'>Smooth flight to a body, then ride along with it.</div></div>
+<div class='ref'><code class='sig'>FlyCamera.stop_following(self)</code></div>
+<div class='ref'><code class='sig'>FlyCamera.update(self, dt, spheres)</code><div class='refdoc'>Call once per animation frame. dt = real seconds since the last frame.</div></div>
 <h3 class='refmod'>check_accuracy.py</h3>
 <p class='refsummary'>check_accuracy.py - is the simulator right? Measure it, don't eyeball it.</p>
 <div class='ref'><code class='sig'>main()</code></div>
@@ -1018,6 +1095,25 @@ Private helpers (names starting with "_") are left out.</p>
 <div class='ref'><code class='sig'>Simulation.energy(self)</code></div>
 <div class='ref'><code class='sig'>Simulation.momentum(self)</code></div>
 <div class='ref'><code class='sig'>Simulation.angular_momentum(self)</code></div>
+<h3 class='refmod'>starfield.py</h3>
+<p class='refsummary'>starfield.py - a background of distant stars (and a faint Milky Way band).</p>
+<div class='ref'><code class='sig'>class StarField</code><div class='refdoc'></div></div>
+<div class='ref'><code class='sig'>StarField.__init__(self, count=1500, seed=7)</code></div>
+<div class='ref'><code class='sig'>StarField.follow(self, camera_pos, look_distance)</code><div class='refdoc'>Keep the sky centred on the camera and inside VPython's drawing range.</div></div>
+<div class='ref'><code class='sig'>StarField.visible(self)</code></div>
+<div class='ref'><code class='sig'>StarField.visible(self, value)</code></div>
+<h3 class='refmod'>trails.py</h3>
+<p class='refsummary'>trails.py - orbit trails that show about the last TWO orbits of each body, or (optionally) the full history.</p>
+<div class='ref'><code class='sig'>class OrbitTrails</code><div class='refdoc'></div></div>
+<div class='ref'><code class='sig'>OrbitTrails.__init__(self, sim, spheres)</code></div>
+<div class='ref'><code class='sig'>OrbitTrails.update(self, sim_time)</code><div class='refdoc'>Call each frame after the simulation has moved.</div></div>
+<div class='ref'><code class='sig'>OrbitTrails.update_widths(self, camera_pos)</code><div class='refdoc'>Call every frame. Rescales each trail so it stays ~1.5 px wide (see the top).</div></div>
+<div class='ref'><code class='sig'>OrbitTrails.set_full_history(self, on, sim_time)</code><div class='refdoc'>Full history = keep everything (up to HISTORY_CAP). Off = last 2 orbits.</div></div>
+<div class='ref'><code class='sig'>OrbitTrails.set_visible(self, on)</code></div>
+<div class='ref'><code class='sig'>OrbitTrails.clear(self)</code></div>
+<h3 class='refmod'>ui_theme.py</h3>
+<p class='refsummary'>ui_theme.py - restyles VPython's web page: full-window 3D view, a slide-out control sidebar, and a heads-up display (HUD) in the top-left corner.</p>
+<div class='ref'><code class='sig'>install(scene)</code><div class='refdoc'>Send the styling and behaviour to the browser. Call AFTER all controls exist.</div></div>
 <h3 class='refmod'>visualize.py</h3>
 <p class='refsummary'>visualize.py - the 3D view, drawn with VPython (opens in a browser tab).</p>
 <div class='ref'><code class='sig'>to_scene(p)</code><div class='refdoc'>Simulation coordinates (metres, z-up) -&gt; VPython screen vector (y-up).</div></div>
@@ -1071,6 +1167,10 @@ DAYS_PER_SECOND = 10.0      # starting animation speed (adjustable with the slid
 <p class="muted">Newest first. Each entry says what changed in the code and which chapters were updated.</p>
 <table>
   <tr><th style="width:18%">Date</th><th>Change</th></tr>
+  <tr><td>2026-11-22</td><td>New interface: full-window view, slide-out control sidebar and HUD (<code>ui_theme.py</code>); camera with inertia,
+  smooth turning, smooth Follow/Overview flights and wheel glide (<code>camera.py</code>); background stars with a Milky Way band
+  (<code>starfield.py</code>); trails showing the last 2 orbits with a full-history switch, thin at any distance (<code>trails.py</code>).
+  Updated: Sections 26, 27, 28, 29 and 32.</td></tr>
   <tr><td>2026-11-20</td><td>First edition of the guide. Covers: N-body physics and Kepler's laws, Euler vs Verlet, NASA/JPL data
   (planets, moons, asteroids, comets via <code>nasa_api.py</code>), free-flying camera, validation results, build system.</td></tr>
 </table>

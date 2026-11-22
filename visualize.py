@@ -38,12 +38,13 @@ screen. So simulation (x, y, z) is drawn at screen (x, z, -y). That's a
 plain rotation, so left/right handedness is kept and orbits still run
 counter-clockwise when seen from above.
 
-CONTROLS (in the browser tab)
------------------------------
-Free-flying camera. Full details in camera.py.
-    W/A/S/D move, E/Q up/down, arrows turn, hold left mouse to steer,
-    wheel = fly forward/back, Shift = faster.
-    Under the scene: pause, follow any body, overview, two speed sliders.
+THE PAGE LAYOUT
+---------------
+ui_theme.py turns VPython's page into a full-window view with:
+    - a HUD (top-left): date, speed, what you're following
+    - a sidebar (button top-right, or the H key) with all the controls
+The other helpers: camera.py (flying), trails.py (orbit trails),
+starfield.py (background stars).
 """
 
 import math
@@ -53,6 +54,7 @@ import numpy as np
 from vpython import (
     button,
     canvas,
+    checkbox,
     color,
     label,
     local_light,
@@ -65,8 +67,11 @@ from vpython import (
     wtext,
 )
 
+import ui_theme
 from camera import FlyCamera
 from data_sources import AU, DAY
+from starfield import StarField
+from trails import OrbitTrails
 
 # ---- drawing scales (change these freely; they don't touch the physics) ---
 DISTANCE_SCALE = 10.0 / AU   # 1 AU -> 10 screen units
@@ -76,6 +81,7 @@ STAR_SIZE = 1.2              # the Sun's drawn radius (capped, or it would swall
 MIN_SIZE = 0.012             # smallest drawn radius, so small moons/asteroids stay visible
 MOON_DISTANCE_EXAGGERATION = 30.0
 FPS = 60
+SLIDER_LENGTH = 290          # pixels, to fit the sidebar
 
 
 def to_scene(p):
@@ -99,11 +105,10 @@ class SolarSystemView:
         self.days_per_second = days_per_second
         self.paused = False
         self.time_debt = 0.0  # simulated seconds owed but not yet stepped
+        self.following = None
 
-        self.scene = canvas(
-            title="<b>Solar System Simulator</b>",
-            width=1200, height=720, background=color.black,
-        )
+        # The size is only a starting value: ui_theme stretches it to the window.
+        self.scene = canvas(title="", width=1280, height=800, background=color.black)
         # The Sun is the ONLY light source, so planets get a real
         # day side and night side. A little ambient light keeps the
         # night side faintly visible.
@@ -111,16 +116,21 @@ class SolarSystemView:
         self.scene.ambient = color.gray(0.12)
         self.sun_light = None
 
+        # HUD (top-left): one block of HTML, rewritten every frame.
+        self.hud = wtext(pos=self.scene.title_anchor, text="")
+
         self.spheres = {}
         self.labels = {}
         self.spin_axes = {}  # screen-space spin axis of each body
-
         for body in sim.bodies:
             self._create_sphere(body)
 
+        self.stars = StarField()
+        self.trails = OrbitTrails(sim, self.spheres)
         self.camera = FlyCamera(self.scene)
         self._fit_camera()
         self._build_controls()
+        ui_theme.install(self.scene)   # last: restyles the page into HUD + sidebar
 
     # --------------------------------------------------------------- setup
     def _create_sphere(self, body):
@@ -134,11 +144,6 @@ class SolarSystemView:
             **extra,
             emissive=is_star,  # stars glow; they aren't lit by something else
             shininess=0.0,
-            make_trail=not is_star,
-            trail_radius=0.01,
-            trail_color=vector(*body.color) * 0.6,
-            retain=4000,      # keep the last 4000 trail points
-            interval=2,       # add a trail point every 2 frames
         )
         if is_star and self.sun_light is None:
             self.sun_light = local_light(pos=s.pos, color=color.white)
@@ -170,67 +175,109 @@ class SolarSystemView:
         distance = 1.15 * farthest / math.tan(self.scene.fov / 2)
         direction = vector(0, -0.5, -1).norm()      # looking down at an angle
         self.camera.set_home(-direction * distance, look_at=vector(0, 0, 0))
-        self.camera.go_home()
+        self.camera.jump_home()
 
     def _build_controls(self):
+        """The sidebar. Everything appended to the caption ends up in it."""
         sc = self.scene
-        sc.append_to_caption("\n")
-        self.date_text = wtext(text="")
-        sc.append_to_caption("    ")
-        button(text="Pause / Play", bind=self._toggle_pause)
-        sc.append_to_caption("   Follow: ")
-        self.follow_menu = menu(choices=["(free flight)"] + list(self.spheres),
-                                bind=self._choose_follow)
-        sc.append_to_caption("  ")
-        button(text="Overview", bind=self._go_home)
+        h = lambda title: sc.append_to_caption(f"<div class='ss-h'>{title}</div>")
 
-        sc.append_to_caption("\n\nTime speed:   ")
+        h("Simulation")
+        self.pause_button = button(text="Pause", bind=self._toggle_pause)
+        sc.append_to_caption("\nTime speed ")
+        self.speed_text = wtext(text="")
+        sc.append_to_caption("\n")
         # Logarithmic slider: -2..2.5 -> 0.01 .. ~316 days per second
         slider(min=-2, max=2.5, value=math.log10(self.days_per_second),
-               length=400, bind=self._set_speed)
-        self.speed_text = wtext(text="")
+               length=SLIDER_LENGTH, bind=self._set_speed)
         self._update_speed_text()
 
-        sc.append_to_caption("\nFlight speed: ")
+        h("Camera")
+        sc.append_to_caption("Follow ")
+        self.follow_menu = menu(choices=["(free flight)"] + list(self.spheres),
+                                bind=self._choose_follow)
+        sc.append_to_caption(" ")
+        button(text="Overview", bind=self._go_home)
+        sc.append_to_caption("\nFlight speed ")
+        self.flight_text = wtext(text="1.0x")
+        sc.append_to_caption("\n")
         # -1..1 -> 0.1x .. 10x the automatic flying speed
-        slider(min=-1, max=1, value=0, length=400, bind=self._set_flight_speed)
-        self.flight_text = wtext(text="  1.0x")
+        slider(min=-1, max=1, value=0, length=SLIDER_LENGTH, bind=self._set_flight_speed)
+        sc.append_to_caption("\nCamera glide ")
+        self.glide_text = wtext(text=f"{self.camera.glide:.2f} s")
+        sc.append_to_caption("\n")
+        # How long the camera takes to speed up / coast to a stop
+        slider(min=0.05, max=1.5, value=self.camera.glide, length=SLIDER_LENGTH, bind=self._set_glide)
 
-        # Keep every line short. If the page gets wider (or taller) than the
-        # window, the browser ALSO uses the arrow keys / Space to scroll it.
+        h("Trails")
+        checkbox(text="Show trails", checked=True, bind=self._toggle_trails)
+        sc.append_to_caption("\n")
+        checkbox(text="Full trail history", checked=False, bind=self._toggle_history)
+        sc.append_to_caption("\n<span class='ss-note'>Off: each body keeps its last 2 orbits.</span>\n")
+        button(text="Clear trails", bind=lambda _b: self.trails.clear())
+
+        h("Display")
+        checkbox(text="Labels", checked=True, bind=self._toggle_labels)
+        sc.append_to_caption("   ")
+        checkbox(text="Stars", checked=True, bind=self._toggle_stars)
+        sc.append_to_caption("\n<span id='ss-fullscreen-slot'></span>")
+
+        h("Flying")
         sc.append_to_caption(
-            "\n\n<b>Fly</b> (click the view first):"
-            "\n  <b>W/S</b> forward/back   <b>A/D</b> left/right   <b>E/Q</b> up/down"
-            "\n  <b>Arrows</b> turn   <b>Hold left mouse</b> steer toward the pointer"
-            "\n  <b>Wheel</b> hop forward/back   <b>Shift</b> 5x faster"
-            "\nSpeed adapts by itself: slow near planets, fast in open space."
-            "\nTo watch Earth spin: Follow Earth, time speed below ~1 day/s."
+            "<kbd>W</kbd>/<kbd>S</kbd> forward/back &nbsp; <kbd>A</kbd>/<kbd>D</kbd> left/right"
+            "\n<kbd>E</kbd>/<kbd>Q</kbd> up/down &nbsp; <kbd>Shift</kbd> 5x faster"
+            "\n<kbd>Arrows</kbd> turn &nbsp; <kbd>Wheel</kbd> glide forward/back"
+            "\n<b>Hold left mouse</b> to steer toward the pointer"
+            "\n<kbd>H</kbd> show/hide this panel &nbsp; <kbd>Esc</kbd> close it"
+            "\n<span class='ss-note'>Speed adapts by itself: slow near planets, fast in open space. "
+            "To watch Earth spin, follow Earth and set time speed below ~1 day/s.</span>"
         )
 
     # ------------------------------------------------------------ controls
-    def _toggle_pause(self, _btn):
+    def _toggle_pause(self, b):
         self.paused = not self.paused
+        b.text = "Play" if self.paused else "Pause"
 
     def _choose_follow(self, m):
         if m.index == 0:
-            self.camera.target = None  # stay where you are, stop riding along
+            self.camera.stop_following()  # stay where you are, stop riding along
+            self.following = None
         else:
             self.camera.follow(self.spheres[m.selected])
+            self.following = m.selected
 
     def _go_home(self, _btn):
         self.follow_menu.index = 0
+        self.following = None
         self.camera.go_home()
 
     def _set_flight_speed(self, s):
         self.camera.speed_factor = 10 ** s.value
-        self.flight_text.text = f"  {self.camera.speed_factor:.1f}x"
+        self.flight_text.text = f"{self.camera.speed_factor:.1f}x"
+
+    def _set_glide(self, s):
+        self.camera.glide = s.value
+        self.glide_text.text = f"{s.value:.2f} s"
 
     def _set_speed(self, s):
         self.days_per_second = 10 ** s.value
         self._update_speed_text()
 
     def _update_speed_text(self):
-        self.speed_text.text = f"  {self.days_per_second:.2f} days / second"
+        self.speed_text.text = f"{self.days_per_second:.2f} days / second"
+
+    def _toggle_trails(self, cb):
+        self.trails.set_visible(cb.checked)
+
+    def _toggle_history(self, cb):
+        self.trails.set_full_history(cb.checked, self.sim.time)
+
+    def _toggle_labels(self, cb):
+        for lab in self.labels.values():
+            lab.visible = cb.checked
+
+    def _toggle_stars(self, cb):
+        self.stars.visible = cb.checked
 
     # ------------------------------------------------------------ drawing
     def _scene_position(self, i, body, positions_by_name):
@@ -260,8 +307,16 @@ class SolarSystemView:
             if self.sun_light is not None and body.radius > 1e8:
                 self.sun_light.pos = s.pos
 
+    def _update_hud(self):
         now = self.start + timedelta(seconds=self.sim.time)
-        self.date_text.text = f"<b>{now:%Y-%m-%d %H:%M}</b>"
+        state = "&#10074;&#10074; Paused" if self.paused else f"&#9654; {self.days_per_second:.2f} days/s"
+        follow = f" &nbsp;·&nbsp; following <b>{self.following}</b>" if self.following else ""
+        text = (f"<div class='ss-date'>{now:%Y-%m-%d %H:%M}</div>"
+                f"<div class='ss-info'>{state}{follow}</div>"
+                f"<div class='ss-hint'>H or &#9776; for controls &nbsp;·&nbsp; W/A/S/D fly &nbsp;·&nbsp; "
+                f"hold left mouse to steer</div>")
+        if text != self.hud.text:
+            self.hud.text = text
 
     # --------------------------------------------------------------- loop
     def run(self):
@@ -279,8 +334,12 @@ class SolarSystemView:
                 self.time_debt -= n_steps * dt
                 if n_steps:
                     self.sim.step(n_steps)
-                self._redraw(n_steps * dt)
+                    self._redraw(n_steps * dt)
+                    self.trails.update(self.sim.time)
             # The camera keeps working while paused, so you can fly around a
             # frozen Solar System. Its clock is REAL time (1/FPS s per frame),
             # not simulated time.
             self.camera.update(1.0 / FPS, self.spheres.values())
+            self.stars.follow(self.camera.pos, self.camera.look_distance)
+            self.trails.update_widths(self.camera.pos)
+            self._update_hud()
