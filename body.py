@@ -57,6 +57,9 @@ class Body:
     texture: str | None = None             # VPython texture name, e.g. "earth"
     parent: str | None = None              # what it orbits closely (Moon -> "Earth").
                                            # Only used to exaggerate moon distances on screen.
+    swarm: str | None = None               # e.g. "Main belt": part of a crowd of thousands,
+                                           # drawn as one dot in a shared cloud instead of
+                                           # its own sphere, label and trail.
 
     def __post_init__(self):
         # Always store vectors as floating-point numpy arrays.

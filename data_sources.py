@@ -294,7 +294,7 @@ def make_small_body_from_record(record, date):
     )
 
 
-def build_system(date, planet_names, moons=None, small_body_queries=(), extra_small_bodies=()):
+def build_system(date, planet_names, moons=None, small_body_queries=(), extra_small_bodies=(), swarms=()):
     """
     Assemble a whole simulation in one call.
 
@@ -306,6 +306,9 @@ def build_system(date, planet_names, moons=None, small_body_queries=(), extra_sm
     small_body_queries : list of dicts for nasa_api.query_small_bodies,
                          e.g. [{"kind": "asteroid", "limit": 10}]
     extra_small_bodies : [("1", "Ceres"), ...] the older hand-picked style
+    swarms             : crowds drawn as dot clouds, e.g.
+                         [{"label": "Main belt", "sb_class": "IMB,MBA,OMB", "count": 2000}]
+                         (see make_swarm). Asteroids already added above are skipped.
 
     THE DOUBLE-COUNTING RULE: if a planet's moons are included, that planet
     switches to its body-only position and GM (see make_body). Otherwise its
@@ -360,7 +363,78 @@ def build_system(date, planet_names, moons=None, small_body_queries=(), extra_sm
         if label not in names_taken:
             bodies.append(make_small_body(designation, date, name=label))
             names_taken.add(label)
+
+    if swarms:
+        sun = next((b for b in bodies if b.name == "Sun"), None)
+        if sun is None:
+            raise ValueError("Swarms (asteroid belt etc.) need the Sun in planet_names")
+        for spec in swarms:
+            members = make_swarm(spec, date, sun, skip_ids=seen_ids, skip_names=names_taken)
+            bodies.extend(members)
+            names_taken.update(b.name for b in members)
     return bodies
+
+
+# ---------------------------------------------------------------------------
+# Swarms: thousands of asteroids at once (the asteroid belt, Jupiter trojans)
+# ---------------------------------------------------------------------------
+SWARM_COLORS = {
+    "Main belt": (0.78, 0.70, 0.55),
+    "Jupiter trojans": (0.55, 0.75, 0.95),
+}
+
+
+def make_swarm(spec, date, sun, skip_ids=(), skip_names=()):
+    """
+    Build a crowd of asteroid Bodies from ONE NASA request, e.g.
+        {"label": "Main belt", "sb_class": "IMB,MBA,OMB", "count": 2000}
+
+    HOW (see orbital_elements.py for the maths):
+      1. nasa_api.query_orbital_elements() returns each asteroid's six
+         orbital elements, valid at a reference date ("epoch").
+      2. Move each one along its ellipse from that epoch to OUR start date
+         (Kepler's 3rd law gives the speed of the steady "mean anomaly").
+      3. Solve Kepler's equation and turn the elements into a position and
+         velocity relative to the SUN'S CENTRE (heliocentric).
+      4. Add the Sun's own position and velocity, because our simulation is
+         measured from the Solar System's balance point (barycentric), and
+         the Sun itself wiggles around that point (mostly due to Jupiter).
+
+    Accuracy (tested against Horizons for Ceres, Vesta, Pallas, Hygiea):
+    ~11,000-108,000 km, 0.003-0.02% of their distance from the Sun. Step 2
+    uses pure two-body motion and ignores Jupiter's tugs between the epoch
+    and the start date; invisible on screen.
+
+    Members are test particles (pulled, not pulling) with swarm=label, so
+    they are drawn as dots in one cloud (see visualize.py).
+    """
+    from astropy.time import Time
+
+    from orbital_elements import elements_to_state, propagate_mean_anomaly
+
+    el = nasa_api.query_orbital_elements(spec.get("sb_class", "IMB,MBA,OMB"), spec.get("count", 2000))
+    keep = [k for k, (sid, name) in enumerate(zip(el["spkid"], el["name"]))
+            if sid not in skip_ids and short_name(name) not in skip_names]
+    if not keep:
+        return []
+    arr = lambda key: np.array([el[key][k] for k in keep], dtype=float)
+
+    mu = G * sun.mass                       # heliocentric orbits: the Sun does the pulling
+    a = arr("a_au") * AU
+    days_since_epoch = Time(date, scale="tdb").jd - arr("epoch_jd")
+    M = propagate_mean_anomaly(np.radians(arr("ma_deg")), a, mu, days_since_epoch * DAY)
+    pos, vel = elements_to_state(a, arr("e"), np.radians(arr("i_deg")), np.radians(arr("om_deg")),
+                                 np.radians(arr("w_deg")), M, mu)
+    pos += sun.position
+    vel += sun.velocity
+
+    label = spec.get("label", "Asteroids")
+    color = SWARM_COLORS.get(label, (0.7, 0.7, 0.7))
+    return [
+        Body(name=el["name"][k], mass=0.0, position=pos[n], velocity=vel[n],
+             is_test_particle=True, radius=1e3, color=color, swarm=label)
+        for n, k in enumerate(keep)
+    ]
 
 
 def suggest_time_step(bodies, steps_per_orbit=100):

@@ -14,6 +14,8 @@ over several official JPL services, each with its own format:
   Planet mass WITHOUT its moons          same page, second table          HTML table
   Search the 1.5 million+ asteroids      SBDB Query API                   JSON
     and ~4,000 comets
+  Orbits of thousands of asteroids       SBDB Query API (elements)        JSON
+    at once (asteroid belt, trojans)
   Find any object by name                Horizons Lookup API              JSON
 
 This file hides those differences behind plain Python functions:
@@ -22,6 +24,7 @@ This file hides those differences behind plain Python functions:
     moon_physical_data()              -> GM / radius / density for each moon
     planet_gm_without_moons()         -> {"Jupiter": 126686531.9, ...}
     query_small_bodies(...)           -> asteroids or comets matching a filter
+    query_orbital_elements("MBA")     -> orbits of the N biggest main-belt asteroids
     lookup("Halley")                  -> what NASA calls this object, and its IDs
 
 The rest of the project never needs to know which website an answer came
@@ -316,6 +319,43 @@ def query_small_bodies(kind="asteroid", sb_class=None, near_earth=False,
             "period_years": _to_float(r["per_y"]),
         })
     return bodies
+
+
+def query_orbital_elements(sb_class="MBA", limit=2000, refresh=False):
+    """
+    ORBITAL ELEMENTS (not positions) for many asteroids in ONE request, for
+    drawing whole populations like the main belt. Returns a dict of lists:
+        {"spkid", "name", "a_au", "e", "i_deg", "om_deg", "w_deg", "ma_deg", "epoch_jd"}
+    orbital_elements.py turns these into positions (see there for what each
+    element means).
+
+    Choices made here (found by testing the API):
+      - numbered asteroids only (sb-ns=n): their orbits are well determined
+        and share one recent reference date. Unnumbered ones can have
+        orbits last fitted in 1999.
+      - sorted by H, the "absolute magnitude": a brightness, where SMALLER
+        means BRIGHTER, which for asteroids mostly means BIGGER. So the
+        first N are roughly the N largest.
+    """
+    params = {
+        "fields": "spkid,full_name,a,e,i,om,w,ma,epoch",
+        "sb-class": sb_class,
+        "sb-ns": "n",
+        "sort": "H",
+        "limit": int(limit),
+        "full-prec": "1",
+    }
+    reply = _fetch_json(SBDB_QUERY_API, params, refresh)
+    out = {k: [] for k in ("spkid", "name", "a_au", "e", "i_deg", "om_deg", "w_deg", "ma_deg", "epoch_jd")}
+    for spkid, name, a, e, i, om, w, ma, epoch in reply.get("data", []):
+        values = [_to_float(v) for v in (a, e, i, om, w, ma, epoch)]
+        if None in values or values[1] >= 1:   # skip incomplete or unbound orbits
+            continue
+        out["spkid"].append(str(spkid))
+        out["name"].append(name.strip())
+        for key, v in zip(("a_au", "e", "i_deg", "om_deg", "w_deg", "ma_deg", "epoch_jd"), values):
+            out[key].append(v)
+    return out
 
 
 def count_small_bodies(kind="asteroid", refresh=False):

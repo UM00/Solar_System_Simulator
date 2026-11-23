@@ -72,8 +72,8 @@ class OrbitTrails:
         star_index = int(sim.gravity_masses.argmax())   # the Sun
         index = {name: i for i, name in enumerate(sim.names)}
         for i, body in enumerate(sim.bodies):
-            if i == star_index:
-                continue  # the Sun doesn't get a trail
+            if i == star_index or body.swarm:
+                continue  # no trail for the Sun, or for belt asteroids (drawn as dots)
             j = index.get(body.parent, star_index)
             mu = G * (sim.masses[j] + sim.masses[i])
             period = orbital_period(sim.positions[i] - sim.positions[j],

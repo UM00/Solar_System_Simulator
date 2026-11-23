@@ -4,3 +4,4 @@
 .gitignore
 __pycache__/
 docs/build/guide_tmp.pdf
+/CLAUDE.md

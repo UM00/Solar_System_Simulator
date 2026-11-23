@@ -15,6 +15,7 @@ Everything you might want to change is in the SETTINGS block below.
     Phase 3: add the other planets
     Phase 4: add moons of other planets       (MOONS)
     Phase 5: add asteroids and comets         (SMALL_BODY_QUERIES / SMALL_BODIES)
+    Phase 6: the asteroid belt and trojans    (SWARMS)
 No physics code needs to change for any of these. That's the point of the
 Body / Simulation design. All moon and asteroid data comes from NASA/JPL
 through nasa_api.py.
@@ -56,6 +57,17 @@ SMALL_BODY_QUERIES = [
 # Hand-picked extras as (Horizons designation, display name).
 SMALL_BODIES = [("99942", "Apophis")]
 
+# Crowds of real asteroids, drawn as clouds of dots (see swarm_view.py).
+# Orbits come from NASA in one request each; "count" = how many of the
+# largest. Classes: IMB/MBA/OMB = inner/main/outer belt, TJN = Jupiter trojans.
+# More dots = each dot is refreshed less often (swarm_view.py moves 150 dots
+# per frame, so 1,800 dots are all refreshed 5 times a second).
+SWARMS = [
+    {"label": "Main belt", "sb_class": "IMB,MBA,OMB", "count": 1500},
+    {"label": "Jupiter trojans", "sb_class": "TJN", "count": 300},
+]
+# SWARMS = []   # no belt
+
 DT_HOURS = 1.0              # largest time step allowed. Made smaller automatically for fast moons
 DAYS_PER_SECOND = 10.0      # starting animation speed (adjustable with the slider)
 # ===========================================================================
@@ -63,8 +75,11 @@ DAYS_PER_SECOND = 10.0      # starting animation speed (adjustable with the slid
 
 def main():
     print(f"Loading bodies for {START_DATE} from NASA/JPL (cached after the first run)...")
-    bodies = build_system(START_DATE, BODY_NAMES, MOONS, SMALL_BODY_QUERIES, SMALL_BODIES)
-    print(f"  {len(bodies)} bodies: {', '.join(b.name for b in bodies)}")
+    bodies = build_system(START_DATE, BODY_NAMES, MOONS, SMALL_BODY_QUERIES, SMALL_BODIES, SWARMS)
+    named = [b.name for b in bodies if not b.swarm]
+    print(f"  {len(named)} bodies: {', '.join(named)}")
+    for spec in SWARMS:
+        print(f"  + {sum(b.swarm == spec['label'] for b in bodies):,} asteroids in '{spec['label']}'")
 
     # A fast moon needs small steps (see suggest_time_step in data_sources.py).
     dt = DT_HOURS * 3600.0

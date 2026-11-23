@@ -40,26 +40,46 @@ def accelerations(positions, gravity_masses):
     gravity_masses : array (N,), kg. Test particles have 0 here, so they
                      are pulled but don't pull anything themselves.
     returns        : array (N, 3), m/s^2
-    """
-    # diff[i, j] = vector pointing FROM body i TO body j, for every pair at once.
-    # [np.newaxis] adds a dimension so numpy "broadcasts" (N,1,3) against (1,N,3),
-    # giving shape (N, N, 3). That's all N*N separation vectors in one line.
-    diff = positions[np.newaxis, :, :] - positions[:, np.newaxis, :]
 
-    # Distance between every pair: shape (N, N)
+    SPEED TRICK: ONLY BODIES WITH MASS PULL
+    A test particle's pull is exactly zero, so computing it is wasted work.
+    We only use the M bodies that pull (the Sun, planets, big moons...) as
+    SOURCES, so the cost is N x M pairs instead of N x N. With a 2,000-
+    asteroid belt that's ~50,000 pairs per step instead of ~5,000,000.
+    The answer is identical: we only skip terms that would be zero.
+    """
+    sources = np.flatnonzero(gravity_masses)   # indices of the bodies that pull
+    if sources.size == 0:
+        return np.zeros_like(positions)
+    return accelerations_from(positions, positions[sources], gravity_masses[sources])
+
+
+def accelerations_from(positions, src_pos, src_masses):
+    """
+    Acceleration of each body at `positions` (N, 3) caused by the pulling
+    bodies at `src_pos` (M, 3) with masses `src_masses` (M,).
+    simulation.py also uses this directly to move the asteroid belt on its own
+    slower clock.
+    """
+    # diff[i, k] = vector pointing FROM body i TO source k, for every pair at once.
+    # [np.newaxis] adds a dimension so numpy "broadcasts" (N,1,3) against (1,M,3),
+    # giving shape (N, M, 3). That's all N*M separation vectors in one line.
+    diff = src_pos[np.newaxis, :, :] - positions[:, np.newaxis, :]
+
+    # Distance between every pair: shape (N, M)
     dist = np.linalg.norm(diff, axis=2)
 
     # A body doesn't pull on itself. Its distance to itself is 0, which
     # would mean dividing by zero. Setting it to infinity makes 1/inf = 0.
-    np.fill_diagonal(dist, np.inf)
+    dist[dist == 0] = np.inf
 
     inv_r3 = 1.0 / dist**3
 
-    # a_i = G * sum_j  m_j * diff_ij / r_ij^3
-    # The [None, :, None] and [:, :, None] reshape the arrays so every term lines up as (N, N, 3).
+    # a_i = G * sum_k  m_k * diff_ik / r_ik^3
+    # The [None, :, None] and [:, :, None] reshape the arrays so every term lines up as (N, M, 3).
     # No minus sign is needed: diff already points TOWARD the attracting body.
     # (Your Chapter 3 code used -(x - X), which is the same vector flipped.)
-    pull = gravity_masses[None, :, None] * inv_r3[:, :, None] * diff
+    pull = src_masses[None, :, None] * inv_r3[:, :, None] * diff
     return G * pull.sum(axis=1)
 
 
@@ -88,10 +108,12 @@ def potential_energy(positions, gravity_masses):
     It's negative because bodies are "stuck in a well": you'd have to ADD
     energy to pull them apart to infinity (where potential energy is 0).
     """
-    diff = positions[np.newaxis, :, :] - positions[:, np.newaxis, :]
+    sources = np.flatnonzero(gravity_masses)   # test particles add nothing here
+    p, m = positions[sources], gravity_masses[sources]
+    diff = p[np.newaxis, :, :] - p[:, np.newaxis, :]
     dist = np.linalg.norm(diff, axis=2)
-    i, j = np.triu_indices(len(positions), k=1)  # each pair counted once (i < j)
-    return -G * np.sum(gravity_masses[i] * gravity_masses[j] / dist[i, j])
+    i, j = np.triu_indices(len(p), k=1)  # each pair counted once (i < j)
+    return -G * np.sum(m[i] * m[j] / dist[i, j])
 
 
 def total_energy(positions, velocities, gravity_masses):

@@ -10,6 +10,22 @@ single operation. So:
     - The Simulation keeps the "live" state in arrays (positions, velocities).
     - Body objects are updated from those arrays only when you call
       sync_bodies() (for example before reading body.position).
+
+TWO CLOCKS: A FAST LANE AND A SLOW LANE (multiple time-stepping)
+----------------------------------------------------------------
+The time step has to suit the FASTEST orbit: Io (1.77 days) needs ~25-minute
+steps. Stepping a 3,000-asteroid belt that often would make the animation
+crawl, and it's pointless: a belt asteroid takes ~4.6 YEARS per orbit.
+So swarm members (body.swarm, e.g. the asteroid belt) get their own lane:
+    fast lane : everything else, stepped every dt (e.g. 25.5 minutes)
+    slow lane : swarm members, stepped once per SLOW_LANE_STEP (1 day),
+                still with velocity Verlet, using the planets' positions at
+                the start and the end of that day. That is ~1,700 steps per
+                belt orbit, far above the ~100 rule of thumb.
+This is exact bookkeeping, not a shortcut on the planets: swarm members are
+test particles, so the planets never need the asteroids' positions. Between
+slow steps the asteroids' drawn positions lag by under a day, which is
+invisible. Research codes use the same idea with many lanes.
 """
 
 import numpy as np
@@ -18,10 +34,13 @@ from body import Body
 from integrator import velocity_verlet_step
 from physics import (
     accelerations,
+    accelerations_from,
     total_angular_momentum,
     total_energy,
     total_momentum,
 )
+
+SLOW_LANE_STEP = 86400.0   # seconds: the asteroid belt's own time step (1 day)
 
 
 class Simulation:
@@ -52,6 +71,15 @@ class Simulation:
             [b.is_test_particle for b in self.bodies], 0.0, self.masses
         )
         self.acc = accelerations(self.positions, self.gravity_masses)
+
+        # The two lanes (see the top of this file).
+        in_swarm = np.array([bool(b.swarm) for b in self.bodies])
+        if in_swarm.any() and np.any(self.gravity_masses[in_swarm]):
+            raise ValueError("Swarm members must be test particles (mass 0)")
+        self.fast = np.flatnonzero(~in_swarm)
+        self.slow = np.flatnonzero(in_swarm)
+        self.slow_every = max(1, round(SLOW_LANE_STEP / self.dt))  # fast steps per slow step
+        self._fast_steps_done = 0
 
     def add_body(self, body: Body):
         """
@@ -93,11 +121,47 @@ class Simulation:
 
     def step(self, n_steps=1):
         """Advance the simulation by n_steps * dt seconds."""
+        if self.slow.size == 0:
+            # Everyone in the fast lane: the simple, original loop.
+            for _ in range(n_steps):
+                self.positions, self.velocities, self.acc = self.integrator(
+                    self.positions, self.velocities, self.acc, self._accel, self.dt
+                )
+                self.time += self.dt
+            return
+
+        f = self.fast
+        gm_fast = self.gravity_masses[f]
+        accel_fast = lambda pos: accelerations(pos, gm_fast)
         for _ in range(n_steps):
-            self.positions, self.velocities, self.acc = self.integrator(
-                self.positions, self.velocities, self.acc, self._accel, self.dt
+            pos, vel, acc = self.integrator(
+                self.positions[f], self.velocities[f], self.acc[f], accel_fast, self.dt
             )
+            self.positions[f], self.velocities[f], self.acc[f] = pos, vel, acc
             self.time += self.dt
+            self._fast_steps_done += 1
+            if self._fast_steps_done == self.slow_every:
+                self._step_slow_lane()
+                self._fast_steps_done = 0
+
+    def slow_lane_lag(self):
+        """How far (seconds) the slow lane is behind the fast lane right now (< 1 day)."""
+        return self._fast_steps_done * self.dt
+
+    def _step_slow_lane(self):
+        """
+        One velocity Verlet step of length h for the swarm, done when the fast
+        lane has just reached the END of that step. So the kicks use the
+        planets' pull at the start (stored in self.acc) and at the end (now).
+        """
+        s = self.slow
+        h = self.slow_every * self.dt
+        sources = np.flatnonzero(self.gravity_masses)
+        half_vel = self.velocities[s] + 0.5 * h * self.acc[s]           # kick (old pull)
+        self.positions[s] += h * half_vel                                 # drift
+        self.acc[s] = accelerations_from(self.positions[s], self.positions[sources],
+                                         self.gravity_masses[sources])    # new pull
+        self.velocities[s] = half_vel + 0.5 * h * self.acc[s]            # kick (new pull)
 
     def sync_bodies(self):
         """Copy the live arrays back into the Body objects."""

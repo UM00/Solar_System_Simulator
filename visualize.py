@@ -48,6 +48,7 @@ starfield.py (background stars).
 """
 
 import math
+import time
 from datetime import datetime, timedelta
 
 import numpy as np
@@ -71,6 +72,7 @@ import ui_theme
 from camera import FlyCamera
 from data_sources import AU, DAY
 from starfield import StarField
+from swarm_view import SwarmClouds
 from trails import OrbitTrails
 
 # ---- drawing scales (change these freely; they don't touch the physics) ---
@@ -80,13 +82,17 @@ PLANET_SIZE = 0.20           # Earth's drawn radius, in screen units
 STAR_SIZE = 1.2              # the Sun's drawn radius (capped, or it would swallow Mercury)
 MIN_SIZE = 0.012             # smallest drawn radius, so small moons/asteroids stay visible
 MOON_DISTANCE_EXAGGERATION = 30.0
-FPS = 60
 SLIDER_LENGTH = 290          # pixels, to fit the sidebar
 
 
 def to_scene(p):
     """Simulation coordinates (metres, z-up) -> VPython screen vector (y-up)."""
     return vector(p[0], p[2], -p[1]) * DISTANCE_SCALE
+
+
+def to_scene_array(p):
+    """The same conversion for a whole (N, 3) array at once (used for swarms)."""
+    return np.column_stack([p[:, 0], p[:, 2], -p[:, 1]]) * DISTANCE_SCALE
 
 
 def display_radius(body):
@@ -122,9 +128,13 @@ class SolarSystemView:
         self.spheres = {}
         self.labels = {}
         self.spin_axes = {}  # screen-space spin axis of each body
-        for body in sim.bodies:
+        # Bodies drawn as their own sphere. Swarm members (the asteroid belt)
+        # are drawn as dots by SwarmClouds instead.
+        self.drawn = [(i, b) for i, b in enumerate(sim.bodies) if not b.swarm]
+        for _, body in self.drawn:
             self._create_sphere(body)
 
+        self.swarms = SwarmClouds(sim, to_scene_array)
         self.stars = StarField()
         self.trails = OrbitTrails(sim, self.spheres)
         self.camera = FlyCamera(self.scene)
@@ -220,6 +230,10 @@ class SolarSystemView:
         checkbox(text="Labels", checked=True, bind=self._toggle_labels)
         sc.append_to_caption("   ")
         checkbox(text="Stars", checked=True, bind=self._toggle_stars)
+        for name in self.swarms.labels():
+            sc.append_to_caption("\n")
+            checkbox(text=f"{name} ({self.swarms.count(name):,} asteroids)", checked=True,
+                     bind=lambda cb, n=name: self.swarms.set_visible(n, cb.checked))
         sc.append_to_caption("\n<span id='ss-fullscreen-slot'></span>")
 
         h("Flying")
@@ -290,8 +304,8 @@ class SolarSystemView:
         return to_scene(pos)
 
     def _redraw(self, seconds_advanced):
-        positions_by_name = dict(zip(self.sim.names, self.sim.positions))
-        for i, body in enumerate(self.sim.bodies):
+        positions_by_name = {b.name: self.sim.positions[i] for i, b in self.drawn}
+        for i, body in self.drawn:
             s = self.spheres[body.name]
             s.pos = self._scene_position(i, body, positions_by_name)
             self.labels[body.name].pos = s.pos
@@ -320,13 +334,30 @@ class SolarSystemView:
 
     # --------------------------------------------------------------- loop
     def run(self):
-        """Animate forever (close the browser tab / Ctrl+C to stop)."""
+        """
+        Animate forever (close the browser tab / Ctrl+C to stop).
+
+        REAL ELAPSED TIME
+        rate(60) aims for 60 loops a second, but a heavy frame (lots of
+        physics steps, a busy computer) can take longer. So the clocks use the
+        MEASURED time since the last frame (real_dt), not a fixed 1/60 s.
+        Otherwise a slow computer would also run the simulation slower.
+        This is the classic "variable time step" game loop.
+        (Tried and rejected: making Python wait for the browser to finish
+        each frame. On a computer where Python and the browser compete for
+        the same CPU, every frame then waited for a round trip, and the
+        controls got slower, not faster.)
+        """
         dt = self.sim.dt
+        last = time.perf_counter()
         while True:
-            rate(FPS)  # at most FPS frames per second
+            rate(60)  # at most 60 frames per second
+            now = time.perf_counter()
+            real_dt = min(now - last, 0.25)   # cap: after a hiccup, don't leap ahead
+            last = now
             if not self.paused:
                 # How much simulated time this frame should cover...
-                self.time_debt += self.days_per_second * DAY / FPS
+                self.time_debt += self.days_per_second * DAY * real_dt
                 # ...in whole physics steps. Any leftover carries to the next
                 # frame, so even very slow speeds (less than one step per frame)
                 # run at the correct average rate.
@@ -336,10 +367,12 @@ class SolarSystemView:
                     self.sim.step(n_steps)
                     self._redraw(n_steps * dt)
                     self.trails.update(self.sim.time)
+                    self.swarms.update()
             # The camera keeps working while paused, so you can fly around a
-            # frozen Solar System. Its clock is REAL time (1/FPS s per frame),
-            # not simulated time.
-            self.camera.update(1.0 / FPS, self.spheres.values())
+            # frozen Solar System. Its clock is REAL time, not simulated time.
+            self.camera.update(real_dt, self.spheres.values())
             self.stars.follow(self.camera.pos, self.camera.look_distance)
             self.trails.update_widths(self.camera.pos)
+            if "Sun" in self.spheres:
+                self.swarms.update_size(self.camera.pos, self.spheres["Sun"].pos)
             self._update_hud()
