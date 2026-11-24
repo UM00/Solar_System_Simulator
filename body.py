@@ -57,6 +57,9 @@ class Body:
     texture: str | None = None             # VPython texture name, e.g. "earth"
     parent: str | None = None              # what it orbits closely (Moon -> "Earth").
                                            # Only used to exaggerate moon distances on screen.
+    spin_axis: np.ndarray | None = None    # REAL direction of the spin axis (unit vector,
+                                           # ecliptic frame, right-hand rule). Set from NASA
+                                           # pole data; None = use axial_tilt only.
     swarm: str | None = None               # e.g. "Main belt": part of a crowd of thousands,
                                            # drawn as one dot in a shared cloud instead of
                                            # its own sphere, label and trail.
@@ -67,6 +70,8 @@ class Body:
         #  to it can silently go wrong, so we force float here.)
         self.position = np.asarray(self.position, dtype=float)
         self.velocity = np.asarray(self.velocity, dtype=float)
+        if self.spin_axis is not None:
+            self.spin_axis = np.asarray(self.spin_axis, dtype=float)
         if self.position.shape != (3,) or self.velocity.shape != (3,):
             raise ValueError(f"{self.name}: position and velocity need exactly 3 numbers each")
         if self.mass < 0:

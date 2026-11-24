@@ -77,6 +77,36 @@ PHYSICAL_DATA = {
 # Bodies that orbit something other than the Sun (used only for drawing).
 PARENTS = {"Moon": "Earth"}
 
+# ---------------------------------------------------------------------------
+# Where each spin axis REALLY points (NASA planetary fact sheets)
+#   (right ascension, its drift per century, declination, its drift per century)
+# Right ascension and declination are "longitude and latitude on the sky",
+# measured in Earth's EQUATORIAL frame (aligned with Earth's equator), in
+# degrees. The drifts are tiny (T = centuries since 1 Jan 2000; T = 0.26 in
+# 2026): the axes slowly wobble (precess).
+# NASA lists each body's IAU "north pole". For Venus that pole is the one on
+# the north side of the ecliptic, and Venus spins backwards around it.
+# assign_spin_axes() works out the right-hand-rule spin axis from it.
+# ---------------------------------------------------------------------------
+POLES = {
+    "Sun":     (286.13,   0.0,    63.87,   0.0),
+    "Mercury": (281.010, -0.033,  61.414, -0.005),
+    "Venus":   (272.76,   0.0,    67.16,   0.0),
+    "Earth":   (0.00,    -0.641,  90.00,  -0.557),
+    "Mars":    (317.681, -0.106,  52.887, -0.061),
+    "Jupiter": (268.057, -0.006,  64.495,  0.002),
+    "Saturn":  (40.589,  -0.036,  83.537, -0.004),
+    "Uranus":  (257.311,  0.0,   -15.175,  0.0),
+    "Neptune": None,   # has an extra wobble term, see pole_vector()
+}
+EARTH_OBLIQUITY_J2000 = 23.4392911   # degrees between Earth's equator and the ecliptic
+# The Moon: NASA gives its orbit's tilt to the ecliptic (5.145 deg) and its
+# equator's tilt to its orbit (6.68 deg). CASSINI'S LAWS say the Moon's spin
+# axis, its orbit's axis and the ecliptic's axis all lie in one plane, with
+# the spin axis on the OPPOSITE side of the ecliptic axis from the orbit's.
+# So the spin axis is 6.68 - 5.145 = 1.535 deg from the ecliptic pole.
+MOON_EQUATOR_TO_ECLIPTIC = 6.68 - 5.145
+
 # VPython has a built-in Earth texture, so the spin and tilt are visible.
 TEXTURES = {"Earth": "earth"}
 
@@ -364,6 +394,8 @@ def build_system(date, planet_names, moons=None, small_body_queries=(), extra_sm
             bodies.append(make_small_body(designation, date, name=label))
             names_taken.add(label)
 
+    assign_spin_axes(bodies, date)
+
     if swarms:
         sun = next((b for b in bodies if b.name == "Sun"), None)
         if sun is None:
@@ -435,6 +467,82 @@ def make_swarm(spec, date, sun, skip_ids=(), skip_names=()):
              is_test_particle=True, radius=1e3, color=color, swarm=label)
         for n, k in enumerate(keep)
     ]
+
+
+def pole_vector(name, date):
+    """
+    Unit vector of a body's NASA/IAU north pole, in OUR ecliptic frame.
+
+    1. Look up right ascension (ra) and declination (dec) for this date.
+    2. Turn them into a 3D arrow in Earth's equatorial frame, like turning
+       longitude/latitude into a point on a globe:
+           (cos dec cos ra, cos dec sin ra, sin dec)
+    3. Rotate to the ecliptic frame. The two frames share the x axis (the
+       equinox direction) and differ by Earth's axial tilt, 23.44 deg,
+       so it's one rotation about x.
+    """
+    from astropy.time import Time
+
+    T = (Time(date, scale="tdb").jd - 2451545.0) / 36525.0
+    if name == "Neptune":
+        N = np.radians(357.85 + 52.316 * T)
+        ra, dec = 299.36 + 0.70 * np.sin(N), 43.46 - 0.51 * np.cos(N)
+    else:
+        ra0, dra, dec0, ddec = POLES[name]
+        ra, dec = ra0 + dra * T, dec0 + ddec * T
+    ra, dec, eps = np.radians(ra), np.radians(dec), np.radians(EARTH_OBLIQUITY_J2000)
+    x, y, z = np.cos(dec) * np.cos(ra), np.cos(dec) * np.sin(ra), np.sin(dec)
+    return np.array([x, y * np.cos(eps) + z * np.sin(eps), -y * np.sin(eps) + z * np.cos(eps)])
+
+
+def _angle_deg(u, v):
+    return np.degrees(np.arccos(np.clip(np.dot(u, v) / (np.linalg.norm(u) * np.linalg.norm(v)), -1, 1)))
+
+
+def assign_spin_axes(bodies, date):
+    """
+    Give the Sun, planets and Moon their REAL spin-axis directions.
+
+    The result is the right-hand-rule spin axis: curl your right hand's
+    fingers the way the body turns and your thumb points along it. For most
+    planets that's NASA's north pole. For a backwards-spinning planet like
+    Venus it's the opposite. We decide which by comparing the angle between
+    the pole and the planet's ORBIT axis (r x v, Section 8 of the guide) with
+    the axial tilt in PHYSICAL_DATA: the one that matches wins.
+
+    Returns {name: tilt measured from the data} so tests can compare it with
+    NASA's published tilt.
+    """
+    by_name = {b.name: b for b in bodies}
+    sun = by_name.get("Sun")
+    measured = {}
+    for body in bodies:
+        if body.name == "Moon" and "Earth" in by_name:
+            earth = by_name["Earth"]
+            h = np.cross(body.position - earth.position, body.velocity - earth.velocity)
+            n_orbit = h / np.linalg.norm(h)
+            k = np.array([0.0, 0.0, 1.0])                    # ecliptic north
+            u = n_orbit - np.dot(n_orbit, k) * k             # where the orbit axis leans
+            u /= np.linalg.norm(u)
+            tilt = np.radians(MOON_EQUATOR_TO_ECLIPTIC)
+            body.spin_axis = k * np.cos(tilt) - u * np.sin(tilt)   # leans the OTHER way (Cassini)
+            measured["Moon"] = _angle_deg(body.spin_axis, n_orbit)
+            continue
+        if body.name not in POLES:
+            continue
+        pole = pole_vector(body.name, date)
+        if body.name == "Sun" or sun is None:
+            body.spin_axis = pole
+            continue
+        h = np.cross(body.position - sun.position, body.velocity - sun.velocity)
+        tilt_if_pole = _angle_deg(pole, h)
+        expected = PHYSICAL_DATA[body.name][4]
+        if abs(tilt_if_pole - expected) <= abs((180 - tilt_if_pole) - expected):
+            body.spin_axis = pole
+        else:
+            body.spin_axis = -pole                            # spins backwards around NASA's "north"
+        measured[body.name] = _angle_deg(body.spin_axis, h)
+    return measured
 
 
 def suggest_time_step(bodies, steps_per_orbit=100):

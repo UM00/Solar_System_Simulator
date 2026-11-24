@@ -537,6 +537,48 @@ large moons are locked, so the project sets their spin period equal to their orb
 <figcaption>Figure 3. The axis keeps the same direction in space (schematic; the tilt is drawn toward/away from the Sun).</figcaption>
 </figure>
 
+<h3>Where each axis really points</h3>
+<p>A tilt <i>angle</i> isn't enough: you also need the <i>direction</i> the axis leans. NASA's fact sheets give each body's north pole
+as a direction on the sky: <b>right ascension</b> and <b>declination</b>, like longitude and latitude, measured in Earth's
+<b>equatorial</b> frame. <code>data_sources.pole_vector()</code> turns them into an arrow, (cos δ cos α, cos δ sin α, sin δ),
+and rotates it into our ecliptic frame. The two frames share the equinox direction and differ by Earth's tilt, 23.44°, so that's a
+single rotation about x. Two special cases:</p>
+<ul>
+<li><b>Backwards spinners.</b> NASA's "north pole" for Venus is the one on the north side of the ecliptic, and Venus spins backwards
+around it. <code>assign_spin_axes()</code> works out the right-hand-rule spin axis by checking which of the pole or its opposite gives the published tilt
+against the planet's orbit axis (<b>r</b> × <b>v</b>).</li>
+<li><b>The Moon follows Cassini's laws.</b> Its spin axis, its orbit's axis and the ecliptic's axis lie in one plane, with the spin
+axis on the <i>opposite</i> side of the ecliptic pole from the orbit axis. From NASA's numbers (orbit tilted 5.145°, equator 6.68° to the orbit),
+the spin axis is 1.535° from the ecliptic pole.</li>
+</ul>
+<table>
+  <tr><th>Body</th><th>Tilt measured from NASA pole + real orbit</th><th>NASA's published tilt</th></tr>
+  <tr><td>Mercury / Venus / Earth</td><td>0.04° / 177.36° / 23.44°</td><td>0.03° / 177.40° / 23.44°</td></tr>
+  <tr><td>Mars / Jupiter / Saturn</td><td>25.19° / 3.12° / 26.73°</td><td>25.19° / 3.13° / 26.73°</td></tr>
+  <tr><td>Uranus / Neptune / Moon</td><td>97.77° / 28.35° / 6.59°</td><td>97.77° / 28.32° / 6.68°</td></tr>
+</table>
+
+<h3>Saturn's rings</h3>
+<p>Saturn's rings are <b>not</b> an asteroid belt. They're billions of chunks of almost pure <b>water ice</b>, from dust to house-sized,
+each orbiting <i>Saturn</i> on its own near-circular path. The main rings span ~280,000 km but are only ~10–100 m thick, far thinner for
+their width than a sheet of paper. They lie in Saturn's <b>equatorial plane</b>, because the pull of Saturn's bulging equator drags the
+particles' orbits into it, so the rings share Saturn's 26.7° tilt and its real pole direction.</p>
+<ul>
+<li><b>Why a ring and not a moon: the Roche limit.</b> Close to a planet, its pull on the near side of a lump is noticeably stronger than
+on the far side. Inside the Roche limit that difference (the <i>tidal</i> force) beats the lump's own gravity, so loose material can't
+clump together. For ice (0.92 g/cm³) around Saturn (0.687 g/cm³): 2.44 × R × (0.687/0.92)<sup>1/3</sup> ≈ <b>2.2 Saturn radii</b>. The main rings
+end at 2.27; the big moons orbit far outside.</li>
+<li><b>Optical depth.</b> NASA's ring table gives each ring's optical depth τ: light passing through is dimmed by e<sup>−τ</sup>, so the ring
+blocks 1 − e<sup>−τ</sup>. That's how solid each ring is drawn: the B ring (τ ≈ 1.5) 78%, the A ring (τ ≈ 0.7) 50%, the C ring (τ ≈ 0.1)
+a 10% veil.</li>
+<li><b>The Cassini Division is a resonance,</b> exactly like the Kirkwood gaps (Section 9): a particle there would orbit twice per orbit of
+the moon Mimas, so Mimas's tugs keep adding up and sweep it out.</li>
+<li><b>Ring seasons.</b> As Saturn circles the Sun (29.5 years), the rings are seen from different angles. The simulation reproduces the
+real 2025 events: Earth crossing the ring plane on 23 March 2025 (measured +0.04°: rings edge-on) and the Sun crossing it at Saturn's
+equinox on 6 May 2025 (+0.01°). In 2026 the Sun is 3.6–4.7° <i>below</i> the rings and lights their south face at only 6–8% strength, which is why
+they look dim from above. By 2032 it's 45%, and in 2039 the Sun crosses the ring plane again.</li>
+</ul>
+
 <h2 id="s12">12. What this model leaves out</h2>
 <p>Every model is a simplification. Knowing what's missing tells you how far to trust it.</p>
 <table>
@@ -546,6 +588,9 @@ large moons are locked, so the project sets their spin period equal to their orb
   <tr><td><b>Tides</b> (bodies stretching each other)</td><td>The Moon recedes 3.8 cm/year</td><td>Millions of years</td></tr>
   <tr><td><b>Non-gravitational forces</b> (comet outgassing, sunlight pressure, Yarkovsky effect)</td><td>Significant for comets and small asteroids</td><td>Comet predictions, asteroid impact risk</td></tr>
   <tr><td><b>Collisions</b></td><td>Bodies pass through each other here</td><td>Close encounters, planet formation</td></tr>
+  <tr><td><b>Shadows</b> (planets on rings and moons, rings on planets)</td><td>VPython draws no shadows</td><td>Saturn's look, eclipses</td></tr>
+  <tr><td><b>Faint rings and narrow gaps</b></td><td>Saturn's D, E, G rings (optical depth 10<sup>−5</sup>–10<sup>−6</sup>) and the 325 km Encke gap are too faint/thin to draw;
+  Jupiter's, Uranus's and Neptune's faint rings are not drawn</td><td>Completeness only</td></tr>
 </table>
 </section>
 
@@ -850,6 +895,8 @@ creation: it converts vectors to float arrays and rejects bad input early (wrong
 <li><code>make_body()</code>: Sun/planet/Moon Body; with <code>without_moons_gm</code> switches to the planet's own body (Section 22).</li>
 <li><code>make_moon()</code>, <code>make_small_body_from_record()</code>, <code>make_small_body()</code>: moons, asteroids, comets.</li>
 <li><code>make_swarm()</code>: a whole crowd (the belt, the Trojans) from one orbital-elements request (Section 23).</li>
+<li><code>POLES</code>, <code>pole_vector()</code>, <code>assign_spin_axes()</code>: each body's real spin-axis direction from NASA pole data, and Cassini's
+laws for the Moon (Section 11). Stored in <code>Body.spin_axis</code>.</li>
 <li><code>build_system()</code>: assembles everything from the settings and applies the double-counting rule.</li>
 <li><code>suggest_time_step()</code>: Kepler-based safe <i>dt</i> (Section 16).</li>
 </ul>
@@ -900,6 +947,10 @@ smoothed thrust (inertia), runs smooth Follow/Overview flights, and positions VP
 <h3><code>starfield.py</code>: background stars</h3>
 <p><code>StarField</code> builds 1,500 tiny glowing boxes, 40% of them in a Milky-Way band, as one compound object that travels with
 the camera (a "skybox", Section 28).</p>
+
+<h3><code>rings.py</code>: Saturn's rings</h3>
+<p><code>SaturnRings</code> builds one thin annulus per ring (C, B, Cassini Division, A, F) from NASA's ring table, sizes them to Saturn's drawn
+radius, tilts them to Saturn's real pole with <code>orient()</code>, and moves them with Saturn each frame (Sections 11 and 28).</p>
 
 <h3><code>swarm_view.py</code>: the asteroid belt on screen</h3>
 <p><code>SwarmClouds</code> draws each swarm as one VPython <code>points</code> object: dots created once, then moved 150 per frame in rotation,
@@ -956,7 +1007,12 @@ Every planetarium cheats, and so do we, <b>only when drawing</b>:</p>
 <li><b>Distances:</b> 1 AU = 10 screen units (shrunk evenly).</li>
 <li><b>Sizes:</b> enlarged and compressed with a <b>square root</b>. Jupiter (11× Earth's width) is drawn only √11 ≈ 3.3× wider. The Sun is
 capped so it doesn't swallow Mercury. There's a minimum size so 20 km moons stay visible.</li>
-<li><b>Moons:</b> drawn 30× farther from their planet than reality, or they'd hide inside the enlarged planet.</li>
+<li><b>Moons:</b> at real distances they'd hide inside their ~150× enlarged planet. So distances around a planet are measured in its radii
+(<i>q</i>) and drawn in its <i>drawn</i> radii: unchanged out to 3 radii (where rings live, so the planet and its rings keep true proportions), then
+compressed as <i>q</i>′ = 3 (<i>q</i>/3)<sup>0.25</sup>. Moons keep their order and never land inside a planet or its rings: our Moon (60 Earth radii) is drawn at
+6.4, Io (6 Jupiter radii) at 3.6, Titan (21 Saturn radii) at 4.9.</li>
+<li><b>Saturn's rings</b> (<code>rings.py</code>) are flat annuli at NASA's measured radii, in units of Saturn's drawn radius, turned to Saturn's real
+pole and made see-through according to each ring's optical depth (Section 11).</li>
 </ul>
 <h3>Light, spin, tilt</h3>
 <ul>
@@ -1084,6 +1140,9 @@ with NASA's real one a year later. This tests <i>physics and data together</i>.<
   <tr><td>Same, dt = 15 min</td><td>~3 × 10<sup>−10</sup></td><td><b>~50 km</b></td></tr>
   <tr><td>Same + 10 biggest asteroids</td><td>~3 × 10<sup>−10</sup></td><td>~50 km (no change)</td></tr>
 </table>
+<p><b>Spin axes and Saturn's rings</b> were tested against published facts: tilts measured from NASA's pole directions and the planets' real
+orbits match NASA's published tilts (e.g. Saturn 26.73° vs 26.73°, Uranus 97.77° vs 97.77°, Venus 177.36° vs 177.40°), and the real 2025
+ring-plane crossings are reproduced to within 0.04° (Section 11).</p>
 <p><b>The asteroid belt</b> was tested the same way: Ceres, Vesta and Pallas built from orbital elements land within 0.003% of NASA's
 positions at the start; belt asteroids 3 Juno and 7 Iris are within 0.016% after a simulated year; the slow lane agrees with a full-rate run
 to a median of 418 km after 180 days; and the Trojans stay at Jupiter's L4/L5 points (Sections 9, 16, 23). Adding the belt doesn't change the
@@ -1194,6 +1253,11 @@ Private helpers (names starting with "_") are left out.</p>
 <p class="muted">Newest first. Each entry says what changed in the code and which chapters were updated.</p>
 <table>
   <tr><th style="width:18%">Date</th><th>Change</th></tr>
+  <tr><td>2026-11-24</td><td>Saturn's rings (new <code>rings.py</code>) from NASA's ring fact sheet: measured radii, optical depth → opacity, albedo →
+  brightness. Real spin-axis directions for the Sun, planets and Moon from NASA pole data (<code>data_sources.pole_vector</code>,
+  <code>assign_spin_axes</code>, <code>Body.spin_axis</code>), with Cassini's laws for the Moon; validated against published tilts and the 2025
+  ring-plane crossings. Moon distances now drawn with a radius-based mapping so moons stay outside rings. Belt dots are resized while paused.
+  New in Section 11 (pole directions, Saturn's rings, Roche limit, optical depth, ring seasons). Updated: Sections 12, 26, 28, 30.</td></tr>
   <tr><td>2026-11-23</td><td>Asteroid belt and Jupiter Trojans: 1,800 real asteroids from one NASA orbital-elements request each
   (<code>nasa_api.query_orbital_elements</code>), converted with Kepler's equation (new <code>orbital_elements.py</code>), simulated in a once-a-day
   slow lane (<code>simulation.py</code>), drawn as dot clouds (new <code>swarm_view.py</code>). Gravity now uses only bodies with mass as sources

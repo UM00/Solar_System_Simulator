@@ -73,6 +73,7 @@ class SwarmClouds:
         self.to_scene_array = to_scene_array
         self._cursor = 0          # where the round-robin refresh continues next frame
         self._radius = None
+        self._resize_left = 0     # dots still waiting for the latest size
         self.groups = {}
         for i, body in enumerate(sim.bodies):
             if body.swarm:
@@ -100,10 +101,17 @@ class SwarmClouds:
         lag = self.sim.slow_lane_lag()
         return self.to_scene_array(self.sim.positions[idx] + self.sim.velocities[idx] * lag)
 
-    def update(self):
-        """Call each frame after the simulation has moved: moves the next DOTS_PER_FRAME dots."""
-        if not self._queue:
+    def update(self, moved=True):
+        """
+        Call EVERY frame (also while paused). Sends the next DOTS_PER_FRAME
+        dots' positions and sizes. moved=False (paused) skips the work unless
+        a size change still has to reach every dot. Found by testing: when
+        updates only ran while the simulation moved, dots sized for a
+        far-away view stayed huge after flying in while paused.
+        """
+        if not self._queue or (not moved and self._resize_left <= 0):
             return
+        self._resize_left -= DOTS_PER_FRAME
         batch = [self._queue[(self._cursor + k) % len(self._queue)]
                  for k in range(min(DOTS_PER_FRAME, len(self._queue)))]
         self._cursor = (self._cursor + len(batch)) % len(self._queue)
@@ -124,7 +132,10 @@ class SwarmClouds:
         dots that already exist. So the size travels with each dot's position
         update instead, and every dot catches up within one refresh cycle.
         """
-        self._radius = SIZE_PER_DISTANCE * max(mag(camera_pos - sun_pos), 1e-6)
+        wanted = SIZE_PER_DISTANCE * max(mag(camera_pos - sun_pos), 1e-6)
+        if self._radius is None or abs(wanted - self._radius) > 0.05 * self._radius:
+            self._radius = wanted
+            self._resize_left = len(self._queue)   # every dot needs the new size once
 
     def labels(self):
         """The swarm names, e.g. ["Main belt", "Jupiter trojans"]."""

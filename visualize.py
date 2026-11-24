@@ -71,6 +71,7 @@ from vpython import (
 import ui_theme
 from camera import FlyCamera
 from data_sources import AU, DAY
+from rings import SaturnRings, orient
 from starfield import StarField
 from swarm_view import SwarmClouds
 from trails import OrbitTrails
@@ -81,7 +82,10 @@ EARTH_RADIUS_M = 6.371e6
 PLANET_SIZE = 0.20           # Earth's drawn radius, in screen units
 STAR_SIZE = 1.2              # the Sun's drawn radius (capped, or it would swallow Mercury)
 MIN_SIZE = 0.012             # smallest drawn radius, so small moons/asteroids stay visible
-MOON_DISTANCE_EXAGGERATION = 30.0
+# Moon distances (see _scene_position): true to the PLANET'S drawn size out to
+# MOON_ZONE planet radii (where rings live), compressed beyond that.
+MOON_ZONE = 3.0
+MOON_GAMMA = 0.25
 SLIDER_LENGTH = 290          # pixels, to fit the sidebar
 
 
@@ -133,6 +137,12 @@ class SolarSystemView:
         self.drawn = [(i, b) for i, b in enumerate(sim.bodies) if not b.swarm]
         for _, body in self.drawn:
             self._create_sphere(body)
+        self.bodies_by_name = {b.name: b for _, b in self.drawn}
+
+        self.rings = None
+        if "Saturn" in self.spheres:
+            self.rings = SaturnRings(self.spheres["Saturn"], self.spin_axes["Saturn"],
+                                     self.bodies_by_name["Saturn"].radius / 1000.0)
 
         self.swarms = SwarmClouds(sim, to_scene_array)
         self.stars = StarField()
@@ -159,17 +169,23 @@ class SolarSystemView:
             self.sun_light = local_light(pos=s.pos, color=color.white)
 
         # ---- axial tilt -------------------------------------------------
-        # Untilted, the axis points straight "up" (ecliptic north).
-        # We lean it by the tilt angle toward the simulation's +y direction.
-        # For EARTH that's the real direction: the +x axis is DEFINED as the
-        # line where Earth's equator crosses its orbit (the equinox
-        # direction), so the axis leans exactly sideways from it. Result:
-        # northern summer arrives in June, as it should.
-        # For other planets the lean direction is a simplification. Their
-        # real poles point in other directions; only the tilt ANGLE is real.
-        tilt = math.radians(body.axial_tilt)
-        s.rotate(angle=-tilt, axis=vector(1, 0, 0), origin=s.pos)
-        self.spin_axes[body.name] = vector(0, math.cos(tilt), -math.sin(tilt))
+        # Untilted, a sphere's axis points straight "up" (ecliptic north).
+        # The Sun, planets and Moon have their REAL spin axis from NASA's
+        # pole data (data_sources.assign_spin_axes): turn the sphere so its
+        # axis points there. That gets both the tilt angle AND its direction
+        # right, which is what makes Saturn's rings face the right way, and
+        # Earth's seasons fall in the right months.
+        # Bodies without pole data (most moons, asteroids) fall back to
+        # leaning by their tilt angle toward the simulation's +y direction.
+        if body.spin_axis is not None:
+            a = body.spin_axis
+            target = vector(a[0], a[2], -a[1]).norm()      # simulation -> screen axes
+            orient(s, vector(0, 1, 0), target, s.pos)
+            self.spin_axes[body.name] = target
+        else:
+            tilt = math.radians(body.axial_tilt)
+            s.rotate(angle=-tilt, axis=vector(1, 0, 0), origin=s.pos)
+            self.spin_axes[body.name] = vector(0, math.cos(tilt), -math.sin(tilt))
 
         self.spheres[body.name] = s
         self.labels[body.name] = label(
@@ -230,6 +246,9 @@ class SolarSystemView:
         checkbox(text="Labels", checked=True, bind=self._toggle_labels)
         sc.append_to_caption("   ")
         checkbox(text="Stars", checked=True, bind=self._toggle_stars)
+        if self.rings:
+            sc.append_to_caption("   ")
+            checkbox(text="Saturn's rings", checked=True, bind=lambda cb: self.rings.set_visible(cb.checked))
         for name in self.swarms.labels():
             sc.append_to_caption("\n")
             checkbox(text=f"{name} ({self.swarms.count(name):,} asteroids)", checked=True,
@@ -295,12 +314,33 @@ class SolarSystemView:
 
     # ------------------------------------------------------------ drawing
     def _scene_position(self, i, body, positions_by_name):
-        """Where to DRAW a body (moons get their distance exaggerated)."""
+        """
+        Where to DRAW a body. Moons need special care.
+
+        Planets are drawn ~150x too big (sqrt sizes) but distances between
+        planets are true to scale, so a moon at its real distance would sit
+        INSIDE its enlarged planet. So distances around a planet are measured
+        in that planet's radii (q = distance / planet radius) and drawn in
+        its DRAWN radii:
+          - out to MOON_ZONE (3 radii) exactly as is. That's where rings
+            live, so rings and the planet keep their true proportions;
+          - beyond that, compressed with a power law,
+                q' = 3 * (q / 3)^0.25
+            the same idea as the square-root sizes: the ORDER of the moons is
+            kept, they never land inside the planet or its rings, and far
+            moons (Iapetus at 61 Saturn radii) don't fly off the screen.
+        Examples: our Moon (60 Earth radii) -> 6.4; Io (6 Jupiter radii) -> 3.6;
+        Titan (21 Saturn radii) -> 4.9.
+        """
         pos = self.sim.positions[i]
         if body.parent and body.parent in positions_by_name:
+            parent = self.bodies_by_name[body.parent]
             parent_pos = positions_by_name[body.parent]
-            offset = (pos - parent_pos) * MOON_DISTANCE_EXAGGERATION
-            return to_scene(parent_pos + offset)
+            rel = pos - parent_pos
+            q = np.linalg.norm(rel) / parent.radius
+            q_drawn = q if q <= MOON_ZONE else MOON_ZONE * (q / MOON_ZONE) ** MOON_GAMMA
+            direction = to_scene(rel).norm()
+            return to_scene(parent_pos) + direction * q_drawn * self.spheres[body.parent].radius
         return to_scene(pos)
 
     def _redraw(self, seconds_advanced):
@@ -320,6 +360,8 @@ class SolarSystemView:
 
             if self.sun_light is not None and body.radius > 1e8:
                 self.sun_light.pos = s.pos
+        if self.rings:
+            self.rings.update()
 
     def _update_hud(self):
         now = self.start + timedelta(seconds=self.sim.time)
@@ -367,7 +409,9 @@ class SolarSystemView:
                     self.sim.step(n_steps)
                     self._redraw(n_steps * dt)
                     self.trails.update(self.sim.time)
-                    self.swarms.update()
+            else:
+                n_steps = 0
+            self.swarms.update(moved=n_steps > 0)
             # The camera keeps working while paused, so you can fly around a
             # frozen Solar System. Its clock is REAL time, not simulated time.
             self.camera.update(real_dt, self.spheres.values())
