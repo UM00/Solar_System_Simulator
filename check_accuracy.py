@@ -18,7 +18,7 @@ Run it from a terminal (with the .venv activated):
 
 WHAT TO EXPECT (measured, start 2026-01-01, 1 year, dt = 1 h)
 --------------------------------------------------------------
-    Sun + Earth, euler         : ~5,300,000 km off, energy error ~1e-2
+    Sun + Earth, euler         : ~5,430,000 km off, energy error ~1e-2
     Sun + Earth, verlet        : ~1,160,000 km off, energy error ~1e-8
     Sun + all planets + Moon   :        ~110 km off
     ...same with --dt-hours 0.25:         ~50 km off

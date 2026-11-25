@@ -1,0 +1,24 @@
+{
+  "runs": [
+    {
+      "label": "Sun + Earth, forward Euler",
+      "energy": "9.33e-03",
+      "off_by": "5,430,006 km"
+    },
+    {
+      "label": "Sun + Earth, velocity Verlet",
+      "energy": "8.70e-09",
+      "off_by": "1,159,713 km"
+    },
+    {
+      "label": "All 8 planets + Moon, velocity Verlet",
+      "energy": "4.60e-09",
+      "off_by": "109 km"
+    },
+    {
+      "label": "Same, 15-minute steps",
+      "energy": "2.88e-10",
+      "off_by": "50 km"
+    }
+  ]
+}

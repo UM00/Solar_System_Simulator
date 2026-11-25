@@ -83,7 +83,7 @@
   <p>This document explains everything in this project: what each file does, the physics behind every
   line, and why it's built the way it is. It's also a general introduction to how solar system
   simulators work. You should be able to read it start to finish and then build one of your own.</p>
-  <p><b>Built:</b> 2026-11-24 11:59 &nbsp;·&nbsp; <b>Code version:</b> git commit <code>ca296f2</code> (plus uncommitted changes)</p><table class='small'><tr><th>File</th><th>Lines</th></tr><tr><td><code>body.py</code></td><td>78</td></tr><tr><td><code>camera.py</code></td><td>316</td></tr><tr><td><code>check_accuracy.py</code></td><td>119</td></tr><tr><td><code>data_sources.py</code></td><td>572</td></tr><tr><td><code>integrator.py</code></td><td>69</td></tr><tr><td><code>main.py</code></td><td>101</td></tr><tr><td><code>nasa_api.py</code></td><td>402</td></tr><tr><td><code>orbital_elements.py</code></td><td>122</td></tr><tr><td><code>physics.py</code></td><td>170</td></tr><tr><td><code>rings.py</code></td><td>111</td></tr><tr><td><code>simulation.py</code></td><td>180</td></tr><tr><td><code>starfield.py</code></td><td>92</td></tr><tr><td><code>swarm_view.py</code></td><td>149</td></tr><tr><td><code>trails.py</code></td><td>140</td></tr><tr><td><code>ui_theme.py</code></td><td>199</td></tr><tr><td><code>visualize.py</code></td><td>422</td></tr></table>
+  <p><b>Built:</b> 2026-11-24 12:33 &nbsp;·&nbsp; <b>Code version:</b> git commit <code>2c06c0f</code> (plus uncommitted changes)</p><table class='small'><tr><th>File</th><th>Lines</th></tr><tr><td><code>body.py</code></td><td>78</td></tr><tr><td><code>camera.py</code></td><td>316</td></tr><tr><td><code>check_accuracy.py</code></td><td>119</td></tr><tr><td><code>data_sources.py</code></td><td>572</td></tr><tr><td><code>integrator.py</code></td><td>69</td></tr><tr><td><code>main.py</code></td><td>101</td></tr><tr><td><code>nasa_api.py</code></td><td>402</td></tr><tr><td><code>orbital_elements.py</code></td><td>122</td></tr><tr><td><code>physics.py</code></td><td>170</td></tr><tr><td><code>rings.py</code></td><td>111</td></tr><tr><td><code>simulation.py</code></td><td>180</td></tr><tr><td><code>starfield.py</code></td><td>92</td></tr><tr><td><code>swarm_view.py</code></td><td>149</td></tr><tr><td><code>trails.py</code></td><td>140</td></tr><tr><td><code>ui_theme.py</code></td><td>199</td></tr><tr><td><code>visualize.py</code></td><td>422</td></tr></table>
   <p class="muted" style="font-size:9pt">The source of this PDF is <code>docs/source/guide.html</code>. Rebuild with
   <code>python docs/build_docs.py</code>. Appendix A (code reference) and Appendix B (current settings) are generated
   from the code at build time, so they always match the code.</p>
@@ -241,7 +241,8 @@ pip install -r requirements.txt       # 3. install the packages
 python check_accuracy.py              # 4. test the physics against NASA (no window)
 python main.py                        # 5. open the 3D view in your browser
 python nasa_api.py                    # 6. try the NASA data module on its own
-python docs/build_docs.py             # 7. rebuild this guide</pre>
+python docs/build_docs.py             # 7. rebuild this guide
+python docs/build_readme.py           # 8. refresh README.md (GitHub does this on every push)</pre>
 <p>What you can change lives in the <b>SETTINGS</b> block at the top of <code>main.py</code> (Appendix B shows its
 current contents): which planets, which moons, which asteroid searches, the time step and the animation speed.</p>
 </section>
@@ -637,7 +638,7 @@ straight line that touches a circle always ends up slightly <b>outside</b> it. E
 <figcaption>Figure 4. One Euler step (step size exaggerated). The tangent line overshoots the circle.</figcaption>
 </figure>
 <p><b>Measured in this project</b> (Sun + Earth, <i>dt</i> = 1 hour, one year): energy error 1 part in 100, Earth
-5 300 000 km away from where NASA says it really was.</p>
+5 430 000 km away from where NASA says it really was.</p>
 
 <h2 id="s15">15. Velocity Verlet (leapfrog) and symplectic methods</h2>
 <pre class="code">half_vel = vel + 0.5 * dt * acc            # 1. KICK:  half a velocity update (old force)
@@ -662,7 +663,7 @@ and it retraces its path exactly. Methods that preserve the deep geometric struc
 slightly and stays bounded for millions of orbits. That's why real planetary codes use this family of methods.</p>
 <table>
   <tr><th>Measured (Sun + Earth, dt = 1 h, 1 year)</th><th>Energy error</th><th>Earth vs NASA</th></tr>
-  <tr><td>Forward Euler</td><td>9 × 10<sup>−3</sup></td><td>5 300 000 km</td></tr>
+  <tr><td>Forward Euler</td><td>9 × 10<sup>−3</sup></td><td>5 430 000 km</td></tr>
   <tr><td>Velocity Verlet</td><td>9 × 10<sup>−9</sup> (about 1 million times smaller)</td><td>1 160 000 km*</td></tr>
 </table>
 <p class="muted" style="font-size:9.3pt">* The remaining position error with Verlet is not the integrator's fault. It's missing physics: with only
@@ -969,6 +970,16 @@ the run. Options: <code>--bodies</code>, <code>--start</code>, <code>--days</cod
 <p>Builds this PDF from <code>docs/source/guide.html</code> and fills in the generated appendices. <code>--check</code> lists
 code that changed since the guide was last built.</p>
 
+<h3><code>docs/build_readme.py</code>: the self-updating README</h3>
+<p>Refills the marked blocks of <code>README.md</code> (<code>&lt;!-- AUTO:NAME --&gt;</code> … <code>&lt;!-- /AUTO:NAME --&gt;</code>) from the code. It uses
+Python's <code>ast</code> module to read every file's docstring and <code>import</code> lines, and from those builds a <b>Mermaid</b> architecture diagram
+(GitHub draws Mermaid text as a diagram), a table of files, the current settings and line counts. <code>--validate</code> re-runs
+<code>check_accuracy.py</code> and stores the results in <code>docs/validation.json</code>. <code>--screenshots</code> starts the simulator, drives it in a headless
+browser with Playwright, and saves <code>docs/images/*.jpg</code>. A GitHub Action (<code>.github/workflows/readme.yml</code>) runs the script on every push
+and commits the README if the generated parts changed. The generated text contains no dates or commit hashes, so it only changes when the
+code does. Testing it showed the forward-Euler figure in this guide was outdated (measured before the switch to GM masses), and it has been corrected
+to 5 430 000 km.</p>
+
 <h2 id="s27">27. One frame, traced end to end</h2>
 <pre class="code">view.run()  ── a new frame begins (at 10 days/s and 60 frames/s it owes 4 hours)
    ├─► sim.step(n) ───────────── repeated n times (n = owed time / dt):
@@ -1133,7 +1144,7 @@ with NASA's real one a year later. This tests <i>physics and data together</i>.<
 </ol>
 <table>
   <tr><th>Setup (start 2026-01-01, 1 year)</th><th>Energy error</th><th>Earth vs NASA</th></tr>
-  <tr><td>Sun + Earth, Euler, dt = 1 h</td><td>~1 × 10<sup>−2</sup></td><td>~5 300 000 km</td></tr>
+  <tr><td>Sun + Earth, Euler, dt = 1 h</td><td>~1 × 10<sup>−2</sup></td><td>~5 430 000 km</td></tr>
   <tr><td>Sun + Earth, Verlet, dt = 1 h</td><td>~1 × 10<sup>−8</sup></td><td>~1 160 000 km</td></tr>
   <tr><td>All planets + Moon, masses in kg (old bug)</td><td>~5 × 10<sup>−9</sup></td><td>~88 700 km</td></tr>
   <tr><td>All planets + Moon, NASA GM, dt = 1 h</td><td>~5 × 10<sup>−9</sup></td><td><b>~109 km</b></td></tr>
@@ -1417,6 +1428,9 @@ DAYS_PER_SECOND = 10.0      # starting animation speed (adjustable with the slid
 <p class="muted">Newest first. Each entry says what changed in the code and which chapters were updated.</p>
 <table>
   <tr><th style="width:18%">Date</th><th>Change</th></tr>
+  <tr><td>2026-11-24</td><td>Self-updating <code>README.md</code> for GitHub (new <code>docs/build_readme.py</code> and <code>.github/workflows/readme.yml</code>):
+  generated architecture diagram, file table, settings, accuracy table, automated screenshots. Corrected the forward-Euler result to the re-measured
+  5 430 000 km (Sections 14, 15, 30). Updated: Sections 3, 26.</td></tr>
   <tr><td>2026-11-24</td><td>Saturn's rings (new <code>rings.py</code>) from NASA's ring fact sheet: measured radii, optical depth → opacity, albedo →
   brightness. Real spin-axis directions for the Sun, planets and Moon from NASA pole data (<code>data_sources.pole_vector</code>,
   <code>assign_spin_axes</code>, <code>Body.spin_axis</code>), with Cassini's laws for the Moon; validated against published tilts and the 2025
