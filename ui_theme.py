@@ -18,6 +18,9 @@ WHAT THE JAVASCRIPT DOES
 - Resizes the 3D canvas to the window, and again whenever the window resizes.
 - Moves the caption into a panel that slides in from the right.
   Open/close: the button in the top-right corner, or the H key. Esc closes it.
+- Folds the "Experimental simulation" controls (between two marker <span>s
+  that visualize.py writes) into a sub-panel that opens when its orange
+  title is clicked.
 - Hands keyboard focus back to the page after you use a slider or menu,
   so the arrow keys fly the camera instead of nudging the slider.
 - Stops arrow keys / Space / PageUp / PageDown from scrolling the page.
@@ -64,6 +67,16 @@ body { font-family: "Segoe UI", system-ui, sans-serif; color:#dfe6ee; }
                        margin:9px 0 4px; }
 .ss-panel .ui-slider .ui-slider-handle { background:#4d8fe0; border:none; border-radius:50%;
                                          width:15px; height:15px; top:-5px; outline:none; }
+
+/* --- the Experimental simulation section (folds open when its title is clicked) --- */
+.ss-panel .ss-exp-h { color:#f0a23a; cursor:pointer; user-select:none; border-bottom-color:rgba(240,162,58,0.35); }
+.ss-panel .ss-exp-h::after { content:"  \\25B8"; }
+.ss-panel .ss-exp-h.open::after { content:"  \\25BE"; }
+.ss-panel .ss-exp { display:none; border-left:2px solid rgba(240,162,58,0.6); padding:4px 0 6px 10px;
+                    background:rgba(240,162,58,0.05); }
+.ss-panel .ss-exp.open { display:block; }
+.ss-hud .ss-exp-badge { margin-top:6px; padding:4px 9px; border-radius:6px; max-width:560px; font-size:12.5px;
+                        color:#1b1200; background:rgba(240,162,58,0.92); text-shadow:none; }
 
 /* --- the open/close button --- */
 #ss-toggle { position:fixed; top:12px; right:14px; z-index:40; width:38px; height:38px;
@@ -147,6 +160,24 @@ JS = """
     });
     var fsHolder = document.getElementById('ss-fullscreen-slot');
     if (fsHolder) fsHolder.appendChild(fsBtn);
+
+    // 2b. Fold everything between the experiment markers into one panel that
+    //     opens and closes when its orange title is clicked.
+    var expStart = document.getElementById('ss-exp-start');
+    var expEnd = document.getElementById('ss-exp-end');
+    if (expStart && expEnd) {
+      var box = document.createElement('div');
+      box.className = 'ss-exp';
+      expStart.parentNode.insertBefore(box, expStart);
+      var node = expStart.nextSibling;
+      while (node && node !== expEnd) { var next = node.nextSibling; box.appendChild(node); node = next; }
+      var title = box.previousElementSibling;
+      if (title && title.classList.contains('ss-exp-h')) {
+        title.addEventListener('click', function () {
+          box.classList.toggle('open'); title.classList.toggle('open');
+        });
+      }
+    }
 
     // 3. Keyboard: H toggles the panel, Esc closes it, keys never scroll the page
     var noScroll = [' ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown'];

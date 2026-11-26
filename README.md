@@ -9,7 +9,7 @@ The planets, moons, asteroid belt and Saturn's rings all start from **NASA/JPL's
 ![Inner Solar System with the asteroid belt](docs/images/overview.jpg)
 
 <!-- AUTO:STATS -->
-**16 Python files · 3,242 lines**, most of them comments explaining the physics for beginners.
+**17 Python files · 3,710 lines**, most of them comments explaining the physics for beginners.
 <!-- /AUTO:STATS -->
 
 ---
@@ -25,6 +25,7 @@ The planets, moons, asteroid belt and Saturn's rings all start from **NASA/JPL's
 | 🪐 **Saturn's rings** | NASA's measured ring radii, optical depth (see-through-ness) and real ring-plane orientation |
 | 🧭 **Real spin axes** | Every planet's axis from NASA pole data; reproduces Saturn's 2025 ring-plane crossings to within 0.04° |
 | 🚀 **Free-flying camera** | Spaceship-style controls with inertia, follow any body, smooth flights |
+| 🧪 **What-if experiments** | Change any body's mass, its speed, or the strength of gravity itself, or pick a preset ("what if Earth stopped?"): adaptive time steps and momentum-conserving collisions keep the results honest |
 | ✅ **Self-checking** | `check_accuracy.py` measures energy conservation and compares against NASA |
 | 📘 **A 40+ page guide** | [`docs/Solar_System_Simulator_Guide.pdf`](docs/Solar_System_Simulator_Guide.pdf) explains all the physics and code for beginners |
 
@@ -83,6 +84,7 @@ flowchart LR
         physics["physics.py"]
         integrator["integrator.py"]
         simulation["simulation.py"]
+        experiments["experiments.py"]
     end
     subgraph layer_3D_view["3D view"]
         visualize["visualize.py"]
@@ -101,6 +103,8 @@ flowchart LR
     data_sources --> orbital_elements
     data_sources --> physics
     data_sources -.-> NASA
+    experiments --> physics
+    experiments --> simulation
     main --> data_sources
     main --> simulation
     main --> visualize
@@ -112,6 +116,7 @@ flowchart LR
     trails --> physics
     visualize --> camera
     visualize --> data_sources
+    visualize --> experiments
     visualize --> rings
     visualize --> starfield
     visualize --> swarm_view
@@ -211,18 +216,19 @@ DAYS_PER_SECOND = 10.0      # starting animation speed (adjustable with the slid
 | [`camera.py`](camera.py) | a free-flying "spaceship" camera with inertia. | 316 |
 | [`check_accuracy.py`](check_accuracy.py) | is the simulator right? Measure it, don't eyeball it. | 119 |
 | [`data_sources.py`](data_sources.py) | real data from NASA, turned into Body objects. | 572 |
+| [`experiments.py`](experiments.py) | the "what if?" laboratory. | 300 |
 | [`integrator.py`](integrator.py) | moving time forward by one small step `dt`. | 69 |
 | [`main.py`](main.py) | start the 3D Solar System. | 101 |
 | [`nasa_api.py`](nasa_api.py) | one simple doorway to NASA/JPL data on moons, asteroids and comets. | 402 |
 | [`orbital_elements.py`](orbital_elements.py) | from the six numbers that describe an orbit to a | 122 |
 | [`physics.py`](physics.py) | Newtonian gravity for any number of bodies. | 170 |
 | [`rings.py`](rings.py) | Saturn's rings, drawn from NASA's measured ring data. | 111 |
-| [`simulation.py`](simulation.py) | holds all the bodies and runs time forward. | 180 |
+| [`simulation.py`](simulation.py) | holds all the bodies and runs time forward. | 186 |
 | [`starfield.py`](starfield.py) | a background of distant stars (and a faint Milky Way band). | 92 |
-| [`swarm_view.py`](swarm_view.py) | draws crowds of thousands of asteroids (the asteroid belt, | 149 |
+| [`swarm_view.py`](swarm_view.py) | draws crowds of thousands of asteroids (the asteroid belt, | 150 |
 | [`trails.py`](trails.py) | orbit trails that show about the last TWO orbits of each body, | 140 |
-| [`ui_theme.py`](ui_theme.py) | restyles VPython's web page: full-window 3D view, a slide-out | 199 |
-| [`visualize.py`](visualize.py) | the 3D view, drawn with VPython (opens in a browser tab). | 422 |
+| [`ui_theme.py`](ui_theme.py) | restyles VPython's web page: full-window 3D view, a slide-out | 230 |
+| [`visualize.py`](visualize.py) | the 3D view, drawn with VPython (opens in a browser tab). | 552 |
 <!-- /AUTO:MODULES -->
 
 ## 🔄 This README updates itself

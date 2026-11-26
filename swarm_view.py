@@ -122,8 +122,9 @@ class SwarmClouds:
             xyz = self._screen_positions(group["indices"][numbers])
             cloud = group["cloud"]
             r = self._radius or 0.02
-            for n, p in zip(numbers, xyz.tolist()):
-                _send(cloud, "modify", [n, [{"pos": p, "radius": r}]])
+            alive = self.sim.alive[group["indices"][numbers]].tolist()   # experiments can destroy asteroids
+            for n, p, a in zip(numbers, xyz.tolist(), alive):
+                _send(cloud, "modify", [n, [{"pos": p, "radius": r, "visible": a}]])
 
     def update_size(self, camera_pos, sun_pos):
         """

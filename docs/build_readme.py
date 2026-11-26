@@ -47,7 +47,7 @@ VALIDATION = ROOT / "docs" / "validation.json"
 LAYERS = {
     "Entry points": ["main", "check_accuracy"],
     "NASA data": ["nasa_api", "data_sources", "orbital_elements"],
-    "Physics engine": ["body", "physics", "integrator", "simulation"],
+    "Physics engine": ["body", "physics", "integrator", "simulation", "experiments"],
     "3D view": ["visualize", "camera", "trails", "starfield", "swarm_view", "rings", "ui_theme"],
 }
 NASA_MARKERS = {"astroquery", "urllib"}   # imports that mean "talks to NASA"

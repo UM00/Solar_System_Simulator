@@ -71,6 +71,7 @@ from vpython import (
 import ui_theme
 from camera import FlyCamera
 from data_sources import AU, DAY
+from experiments import PRESETS, ExperimentLab
 from rings import SaturnRings, orient
 from starfield import StarField
 from swarm_view import SwarmClouds
@@ -145,6 +146,10 @@ class SolarSystemView:
                                      self.bodies_by_name["Saturn"].radius / 1000.0)
 
         self.swarms = SwarmClouds(sim, to_scene_array)
+        self.lab = ExperimentLab(sim)    # "what if?" experiments (experiments.py)
+        self.labels_on = True
+        self._hidden = set()             # bodies hidden because they were destroyed
+        self._last_status = None
         self.stars = StarField()
         self.trails = OrbitTrails(sim, self.spheres)
         self.camera = FlyCamera(self.scene)
@@ -255,6 +260,8 @@ class SolarSystemView:
                      bind=lambda cb, n=name: self.swarms.set_visible(n, cb.checked))
         sc.append_to_caption("\n<span id='ss-fullscreen-slot'></span>")
 
+        self._build_experiment_controls()
+
         h("Flying")
         sc.append_to_caption(
             "<kbd>W</kbd>/<kbd>S</kbd> forward/back &nbsp; <kbd>A</kbd>/<kbd>D</kbd> left/right"
@@ -265,6 +272,104 @@ class SolarSystemView:
             "\n<span class='ss-note'>Speed adapts by itself: slow near planets, fast in open space. "
             "To watch Earth spin, follow Earth and set time speed below ~1 day/s.</span>"
         )
+
+    def _build_experiment_controls(self):
+        """
+        The "Experimental simulation" section (physics in experiments.py).
+        Everything between the two marker spans is folded into one panel by
+        ui_theme.py, which opens and closes when you click the section title.
+        """
+        sc = self.scene
+        sc.append_to_caption("<div class='ss-h ss-exp-h'>&#129514; Experimental simulation</div>"
+                             "<span id='ss-exp-start'></span>")
+        sc.append_to_caption("<span class='ss-note'>Ask \"what if?\" While an experiment is on, the simulation "
+                             "no longer matches NASA's data, and a badge in the corner says so.</span>\n")
+        sc.append_to_caption("<b>Classic what-ifs</b>\n")
+        self.preset_menu = menu(choices=["Pick one..."] + [p[0] for p in PRESETS], bind=self._choose_preset)
+        sc.append_to_caption("\n")
+        self.preset_text = wtext(text="")
+
+        sc.append_to_caption("\n<b>Or build your own</b>\nBody ")
+        names = [b.name for _, b in self.drawn]          # the Sun comes first
+        self.exp_body = names[0]
+        self.exp_body_menu = menu(choices=names, bind=self._choose_exp_body)
+        sc.append_to_caption("\nMass ")
+        self.mass_text = wtext(text="")
+        sc.append_to_caption("\n")
+        # Logarithmic: -2..3 -> 0.01x .. 1000x the real mass
+        self.mass_slider = slider(min=-2, max=3, value=0, length=SLIDER_LENGTH, bind=self._set_exp_mass)
+        sc.append_to_caption("\n")
+        button(text="Gravity off", bind=lambda _b: self._apply_mass_factor(0.0))
+        button(text="Real mass", bind=lambda _b: self._apply_mass_factor(1.0))
+        sc.append_to_caption("\nSpeed, relative to what it orbits\n")
+        for label, how in (("Stop", "stop"), ("Half", "half"), ("Double", "double"), ("Reverse", "reverse")):
+            button(text=label, bind=lambda _b, h=how: self._change_exp_speed(h))
+        sc.append_to_caption("\nStrength of gravity, G ")
+        self.g_text = wtext(text="x1 (real)")
+        sc.append_to_caption("\n")
+        # Logarithmic: -1..1 -> 0.1x .. 10x
+        self.g_slider = slider(min=-1, max=1, value=0, length=SLIDER_LENGTH, bind=self._set_exp_g)
+        sc.append_to_caption("\n")
+        button(text="↺ Back to the real Solar System", bind=self._reset_experiment)
+        sc.append_to_caption("\n")
+        self.exp_status = wtext(text="")
+        sc.append_to_caption("<span id='ss-exp-end'></span>")
+        self._update_mass_text()
+
+    # ------------------------------------------------------- experiments
+    def _choose_preset(self, m):
+        if m.index == 0:
+            return
+        k = m.index - 1
+        label, note, _ = PRESETS[k]
+        self.trails.clear()                       # positions jump back to the real state
+        ok = self.lab.apply_preset(k)
+        self.preset_text.text = (f"<span class='ss-note'>{note}</span>" if ok else
+                                 "<span class='ss-note'>That body isn't in this simulation (see main.py SETTINGS).</span>")
+        self.g_slider.value = math.log10(self.lab.g_scale)
+        self.g_text.text = f"x{self.lab.g_scale:g}"
+        self._update_mass_text()
+        self._redraw(0)
+
+    def _choose_exp_body(self, m):
+        self.exp_body = m.selected
+        self._update_mass_text()
+
+    def _set_exp_mass(self, s):
+        self._apply_mass_factor(10 ** s.value, from_slider=True)
+
+    def _apply_mass_factor(self, factor, from_slider=False):
+        self.lab.set_mass_factor(self.exp_body, factor)
+        self._update_mass_text(move_slider=not from_slider)
+
+    def _update_mass_text(self, move_slider=True):
+        factor = self.lab.mass_factor.get(self.exp_body, 1.0)
+        i = self.sim.index(self.exp_body)
+        if self.lab.is_test[i]:
+            self.mass_text.text = "<span class='ss-note'>(massless test particle: its pull is ignored)</span>"
+        elif factor == 0:
+            self.mass_text.text = "gravity OFF"
+        else:
+            self.mass_text.text = f"x{factor:.3g}" + (" (real)" if factor == 1 else "")
+        if move_slider:
+            self.mass_slider.value = math.log10(factor) if factor > 0 else -2
+
+    def _change_exp_speed(self, how):
+        self.lab.change_speed(self.exp_body, how)
+
+    def _set_exp_g(self, s):
+        self.lab.set_g_scale(10 ** s.value)
+        self.g_text.text = f"x{self.lab.g_scale:.3g}" + (" (real)" if self.lab.g_scale == 1 else "")
+
+    def _reset_experiment(self, _b):
+        self.lab.reset()
+        self.trails.clear()
+        self.preset_menu.index = 0
+        self.preset_text.text = ""
+        self.g_slider.value = 0
+        self.g_text.text = "x1 (real)"
+        self._update_mass_text()
+        self._redraw(0)
 
     # ------------------------------------------------------------ controls
     def _toggle_pause(self, b):
@@ -306,8 +411,9 @@ class SolarSystemView:
         self.trails.set_full_history(cb.checked, self.sim.time)
 
     def _toggle_labels(self, cb):
-        for lab in self.labels.values():
-            lab.visible = cb.checked
+        self.labels_on = cb.checked
+        for name, lab in self.labels.items():
+            lab.visible = cb.checked and self.sim.alive[self.sim.index(name)]
 
     def _toggle_stars(self, cb):
         self.stars.visible = cb.checked
@@ -333,11 +439,14 @@ class SolarSystemView:
         Titan (21 Saturn radii) -> 4.9.
         """
         pos = self.sim.positions[i]
-        if body.parent and body.parent in positions_by_name:
+        parent_alive = body.parent in positions_by_name and self.sim.alive[self.sim.index(body.parent)]
+        if body.parent and parent_alive:      # (in an experiment the planet may have been destroyed)
             parent = self.bodies_by_name[body.parent]
             parent_pos = positions_by_name[body.parent]
             rel = pos - parent_pos
             q = np.linalg.norm(rel) / parent.radius
+            if q == 0:
+                return to_scene(parent_pos)
             q_drawn = q if q <= MOON_ZONE else MOON_ZONE * (q / MOON_ZONE) ** MOON_GAMMA
             direction = to_scene(rel).norm()
             return to_scene(parent_pos) + direction * q_drawn * self.spheres[body.parent].radius
@@ -347,6 +456,14 @@ class SolarSystemView:
         positions_by_name = {b.name: self.sim.positions[i] for i, b in self.drawn}
         for i, body in self.drawn:
             s = self.spheres[body.name]
+            # Destroyed in an experiment (collision)? Hide it; show it again after a reset.
+            alive = self.sim.alive[i]
+            if alive == (body.name in self._hidden):
+                s.visible = alive
+                self.labels[body.name].visible = alive and self.labels_on
+                (self._hidden.discard if alive else self._hidden.add)(body.name)
+            if not alive:
+                continue
             s.pos = self._scene_position(i, body, positions_by_name)
             self.labels[body.name].pos = s.pos
 
@@ -371,8 +488,18 @@ class SolarSystemView:
                 f"<div class='ss-info'>{state}{follow}</div>"
                 f"<div class='ss-hint'>H or &#9776; for controls &nbsp;·&nbsp; W/A/S/D fly &nbsp;·&nbsp; "
                 f"hold left mouse to steer</div>")
+        status = ""
+        if self.lab.active:
+            last = f"<br>{self.lab.events[-1]}" if self.lab.events else ""
+            text += (f"<div class='ss-exp-badge'>&#129514; EXPERIMENT, not real data: {self.lab.describe()}"
+                     f" &nbsp;·&nbsp; day {self.lab.days():.0f}{last}</div>")
+            events = "".join(f"<br>&bull; {e}" for e in self.lab.events[-5:])
+            status = f"<span class='ss-note'><b>Active:</b> {self.lab.describe()}{events}</span>"
         if text != self.hud.text:
             self.hud.text = text
+        if status != self._last_status:
+            self.exp_status.text = status
+            self._last_status = status
 
     # --------------------------------------------------------------- loop
     def run(self):
@@ -406,7 +533,10 @@ class SolarSystemView:
                 n_steps = int(self.time_debt // dt)
                 self.time_debt -= n_steps * dt
                 if n_steps:
-                    self.sim.step(n_steps)
+                    if self.lab.active:   # experiments use adaptive steps + collisions
+                        self.lab.advance(n_steps * dt)
+                    else:
+                        self.sim.step(n_steps)
                     self._redraw(n_steps * dt)
                     self.trails.update(self.sim.time)
             else:

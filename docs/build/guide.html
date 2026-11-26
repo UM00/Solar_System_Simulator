@@ -83,7 +83,7 @@
   <p>This document explains everything in this project: what each file does, the physics behind every
   line, and why it's built the way it is. It's also a general introduction to how solar system
   simulators work. You should be able to read it start to finish and then build one of your own.</p>
-  <p><b>Built:</b> 2026-11-24 12:33 &nbsp;·&nbsp; <b>Code version:</b> git commit <code>2c06c0f</code> (plus uncommitted changes)</p><table class='small'><tr><th>File</th><th>Lines</th></tr><tr><td><code>body.py</code></td><td>78</td></tr><tr><td><code>camera.py</code></td><td>316</td></tr><tr><td><code>check_accuracy.py</code></td><td>119</td></tr><tr><td><code>data_sources.py</code></td><td>572</td></tr><tr><td><code>integrator.py</code></td><td>69</td></tr><tr><td><code>main.py</code></td><td>101</td></tr><tr><td><code>nasa_api.py</code></td><td>402</td></tr><tr><td><code>orbital_elements.py</code></td><td>122</td></tr><tr><td><code>physics.py</code></td><td>170</td></tr><tr><td><code>rings.py</code></td><td>111</td></tr><tr><td><code>simulation.py</code></td><td>180</td></tr><tr><td><code>starfield.py</code></td><td>92</td></tr><tr><td><code>swarm_view.py</code></td><td>149</td></tr><tr><td><code>trails.py</code></td><td>140</td></tr><tr><td><code>ui_theme.py</code></td><td>199</td></tr><tr><td><code>visualize.py</code></td><td>422</td></tr></table>
+  <p><b>Built:</b> 2026-11-26 10:51 &nbsp;·&nbsp; <b>Code version:</b> git commit <code>9358b8d</code> (plus uncommitted changes)</p><table class='small'><tr><th>File</th><th>Lines</th></tr><tr><td><code>body.py</code></td><td>78</td></tr><tr><td><code>camera.py</code></td><td>316</td></tr><tr><td><code>check_accuracy.py</code></td><td>119</td></tr><tr><td><code>data_sources.py</code></td><td>572</td></tr><tr><td><code>experiments.py</code></td><td>300</td></tr><tr><td><code>integrator.py</code></td><td>69</td></tr><tr><td><code>main.py</code></td><td>101</td></tr><tr><td><code>nasa_api.py</code></td><td>402</td></tr><tr><td><code>orbital_elements.py</code></td><td>122</td></tr><tr><td><code>physics.py</code></td><td>170</td></tr><tr><td><code>rings.py</code></td><td>111</td></tr><tr><td><code>simulation.py</code></td><td>186</td></tr><tr><td><code>starfield.py</code></td><td>92</td></tr><tr><td><code>swarm_view.py</code></td><td>150</td></tr><tr><td><code>trails.py</code></td><td>140</td></tr><tr><td><code>ui_theme.py</code></td><td>230</td></tr><tr><td><code>visualize.py</code></td><td>552</td></tr></table>
   <p class="muted" style="font-size:9pt">The source of this PDF is <code>docs/source/guide.html</code>. Rebuild with
   <code>python docs/build_docs.py</code>. Appendix A (code reference) and Appendix B (current settings) are generated
   from the code at build time, so they always match the code.</p>
@@ -135,6 +135,8 @@
     <li class="sub"><a href="#s32">32. Troubleshooting</a></li>
     <li class="sub"><a href="#s33">33. Glossary</a></li>
     <li class="sub"><a href="#s34">34. Further reading</a></li>
+    <li class="tpart">Part IX: What if? Experimental simulation</li>
+    <li class="sub"><a href="#s35">35. Changing the laws and watching what happens</a></li>
     <li class="tpart">Appendices</li>
     <li class="sub"><a href="#appA">A. Code reference (generated from the code)</a></li>
     <li class="sub"><a href="#appB">B. Current settings (generated from main.py)</a></li>
@@ -949,6 +951,10 @@ smoothed thrust (inertia), runs smooth Follow/Overview flights, and positions VP
 <p><code>StarField</code> builds 1,500 tiny glowing boxes, 40% of them in a Milky-Way band, as one compound object that travels with
 the camera (a "skybox", Section 28).</p>
 
+<h3><code>experiments.py</code>: the "what if?" laboratory</h3>
+<p><code>ExperimentLab</code> changes masses, G and speeds, keeps a snapshot of the real state for "Back to the real Solar System",
+and runs experiments with adaptive time steps and collisions (<code>advance()</code>). <code>PRESETS</code> holds the one-click what-ifs (Section 35).</p>
+
 <h3><code>rings.py</code>: Saturn's rings</h3>
 <p><code>SaturnRings</code> builds one thin annulus per ring (C, B, Cassini Division, A, F) from NASA's ring table, sizes them to Saturn's drawn
 radius, tilts them to Saturn's real pole with <code>orient()</code>, and moves them with Saturn each frame (Sections 11 and 28).</p>
@@ -992,6 +998,7 @@ to 5 430 000 km.</p>
    ├─► _redraw()               move spheres, spin them, move labels
    │           (with a belt: every simulated day, one slow-lane step for all swarm members)
    ├─► trails.update()         add a trail point if due; drop points older than 2 orbits
+   │           (during an experiment: lab.advance() instead, with adaptive steps and collisions)
    ├─► swarms.update()         move the next 150 belt dots
    ├─► camera.update()         read keys/mouse, smooth thrust and turning, place VPython's camera
    ├─► stars.follow()          re-centre the star sphere on the camera
@@ -1245,6 +1252,63 @@ this project follows: physics background (Ch. 2), first code (Ch. 3), accuracy (
 </ul>
 </section>
 
+<!-- ============================== PART IX ============================== -->
+<section class="part">
+<div class="part-label">Part IX</div>
+<h1>What if? Experimental simulation</h1>
+
+<h2 id="s35">35. Changing the laws and watching what happens</h2>
+<p>The sidebar's orange <b>🧪 Experimental simulation</b> section (click its title to open it) lets you change the real Solar System:</p>
+<ul>
+<li><b>Classic what-ifs:</b> one-click presets (table below), each starting from the real Solar System and explaining what to expect.</li>
+<li><b>Build your own:</b> pick any body, then set its <b>mass</b> (0.01× to 1000× real, or "Gravity off"), change its <b>speed</b> relative to
+what it orbits (stop, half, double, reverse), or change the <b>strength of gravity</b> itself (G from 0.1× to 10×).</li>
+<li><b>Back to the real Solar System</b> restores positions, velocities, masses and the date exactly as they were when the experiment began.</li>
+</ul>
+<p>While an experiment is on, an orange <b>badge</b> in the corner says "EXPERIMENT, not real data", lists your changes and reports
+events such as collisions. The physics lives in <code>experiments.py</code>. The normal simulation (and <code>check_accuracy.py</code>)
+never uses it.</p>
+
+<h3>Why experiments need extra machinery</h3>
+<ul>
+<li><b>Adaptive time steps.</b> The normal fixed step (25.5 min, set by Io) is tuned for the <i>real</i> Solar System. Make Earth 318× heavier
+and the Moon dives at it, or stop Earth and it falls into the Sun: a fixed step would leap past such close passes and give nonsense. So
+before <i>every</i> step the lab estimates, for each pair, the crossing time <i>r</i>/<i>v</i> and the orbit time √(<i>r</i>³/<i>GM</i>) (Kepler's third law
+divided by 2π), and steps 0.06 of the shortest: about 100 steps per orbit, the same rule as Section 16, now applied continuously. Close
+passes get many tiny steps and the animation slows there (at most 600 steps per frame, so it never freezes). This is the variable step-size
+idea of the book's Chapter 6. The belt's daily slow-lane step is also cut into smaller pieces when an asteroid has a close pass.</li>
+<li><b>Collisions.</b> Bodies are points in the physics, so a crash would send them through each other's centres, where 1/<i>r</i>² blows up. Instead,
+when two bodies touch (using their <i>real</i> radii) they <b>merge</b>: the heavier absorbs the lighter, and total momentum is conserved,
+<b class="v">v</b> = (<i>m</i>₁<b class="v">v</b>₁ + <i>m</i>₂<b class="v">v</b>₂) / (<i>m</i>₁ + <i>m</i>₂) (Newton's third law, Section 8). A massless asteroid that touches a
+body is destroyed. Destroyed bodies disappear from the view until you reset.</li>
+<li><b>Mass vs G.</b> Making gravity stronger (G × <i>k</i>) is the same as multiplying <i>every</i> mass by <i>k</i>, because gravity only ever uses
+G·M (Section 21). That's why "G ×2" behaves like "Sun ×2" for the planets.</li>
+</ul>
+
+<h3>The presets, and how they compare with the textbook (measured)</h3>
+<table>
+  <tr><th style="width:24%">What if…</th><th>Prediction</th><th style="width:30%">Simulation</th></tr>
+  <tr><td>Halve the Sun's mass</td><td>Earth's speed √(<i>GM</i>/<i>r</i>) becomes exactly the new escape speed √(2<i>G</i>(<i>M</i>/2)/<i>r</i>): barely unbound</td>
+      <td>Earth's orbital energy jumps from −4.4×10⁸ to +7×10⁶ J/kg (just unbound; it starts near perihelion, a bit faster than average). 6.4 AU away after 2 years</td></tr>
+  <tr><td>Double the Sun's mass</td><td>Now too slow for a circle: an ellipse with <i>a</i> = 2<i>r</i>/3 (vis-viva), closest point <i>r</i>/3</td>
+      <td>Closest approach 0.341 × the starting distance</td></tr>
+  <tr><td>Switch off the Sun's gravity</td><td>Newton's first law: straight lines at constant speed</td><td>Planets fly off along straight lines</td></tr>
+  <tr><td>Stop Earth in its orbit</td><td>Free fall into the Sun in (year)/(4√2) × (<i>r</i>/1 AU)<sup>1.5</sup> ≈ 63 days from January's 0.983 AU</td>
+      <td>Hits and merges with the Sun after <b>63.0 days</b>. The Sun gains exactly Earth's mass</td></tr>
+  <tr><td>Make Earth as heavy as Jupiter (×318)</td><td>The Moon is 18× too slow; it falls on a thin ellipse that reaches inside Earth after about half an orbit (~0.27 days)</td>
+      <td>The Moon hits Earth after 0.30 days</td></tr>
+  <tr><td>Turn Jupiter into a small star (×80)</td><td>Its moons are ~9× too slow; their closest approach (1/159 of their distance) is inside Jupiter</td>
+      <td>Io, Europa and Ganymede fall into Jupiter at once. The belt survives the first year</td></tr>
+  <tr><td>Double gravity (G ×2)</td><td>Same as doubling every mass</td><td>Earth's closest approach 0.341, matching "Sun ×2"</td></tr>
+</table>
+<p>A reset was also tested: positions, masses and the date come back <b>exactly</b> (bit-for-bit) as they were.</p>
+<div class="callout warn"><span class="callout-title">Limits of the experiments</span>
+Merging is the simplest collision rule: real impacts can also shatter bodies or throw out debris. Radii stay fixed when masses change (a
+Jupiter grown 80× would really shrink slightly; a star would also start shining). And with big changes the Solar System can become <b>chaotic</b>
+(Section 9): tiny differences, even rounding, can lead to visibly different outcomes, so two runs of the same what-if may not end identically
+after a long time.</div>
+</section>
+
 <!-- ============================== APPENDICES ============================== -->
 <section class="part">
 <div class="part-label">Appendix A</div>
@@ -1284,6 +1348,20 @@ Private helpers (names starting with "_") are left out.</p>
 <div class='ref'><code class='sig'>pole_vector(name, date)</code><div class='refdoc'>Unit vector of a body's NASA/IAU north pole, in OUR ecliptic frame.</div></div>
 <div class='ref'><code class='sig'>assign_spin_axes(bodies, date)</code><div class='refdoc'>Give the Sun, planets and Moon their REAL spin-axis directions.</div></div>
 <div class='ref'><code class='sig'>suggest_time_step(bodies, steps_per_orbit=100)</code><div class='refdoc'>The largest SAFE time step (seconds) for these bodies.</div></div>
+<h3 class='refmod'>experiments.py</h3>
+<p class='refsummary'>experiments.py - the "what if?" laboratory.</p>
+<div class='ref'><code class='sig'>class ExperimentLab</code><div class='refdoc'></div></div>
+<div class='ref'><code class='sig'>ExperimentLab.__init__(self, sim)</code></div>
+<div class='ref'><code class='sig'>ExperimentLab.begin(self)</code><div class='refdoc'>First change: remember the real state so it can be restored exactly.</div></div>
+<div class='ref'><code class='sig'>ExperimentLab.reset(self)</code><div class='refdoc'>Back to the real Solar System, exactly as it was when the experiment began.</div></div>
+<div class='ref'><code class='sig'>ExperimentLab.index(self, name)</code></div>
+<div class='ref'><code class='sig'>ExperimentLab.set_mass_factor(self, name, factor)</code><div class='refdoc'>Mass = real mass x factor. 0 switches the body's gravity off.</div></div>
+<div class='ref'><code class='sig'>ExperimentLab.set_g_scale(self, factor)</code><div class='refdoc'>Make gravity itself stronger or weaker: G -&gt; G x factor.</div></div>
+<div class='ref'><code class='sig'>ExperimentLab.change_speed(self, name, how)</code><div class='refdoc'>Change a body's speed RELATIVE TO WHAT IT ORBITS (its planet for moons, otherwise the Sun): "stop", "half", "double" or "reverse".</div></div>
+<div class='ref'><code class='sig'>ExperimentLab.apply_preset(self, k)</code><div class='refdoc'>Start from the real Solar System, then apply preset number k.</div></div>
+<div class='ref'><code class='sig'>ExperimentLab.days(self)</code><div class='refdoc'>Simulated days since the experiment started.</div></div>
+<div class='ref'><code class='sig'>ExperimentLab.describe(self)</code></div>
+<div class='ref'><code class='sig'>ExperimentLab.advance(self, total)</code><div class='refdoc'>Move the experiment forward by `total` seconds with adaptive steps. Returns the time covered.</div></div>
 <h3 class='refmod'>integrator.py</h3>
 <p class='refsummary'>integrator.py - moving time forward by one small step `dt`.</p>
 <div class='ref'><code class='sig'>forward_euler_step(pos, vel, acc, accel_func, dt)</code><div class='refdoc'>The method from your Chapter 3 notebook. Kept here so you can compare.</div></div>
@@ -1428,6 +1506,10 @@ DAYS_PER_SECOND = 10.0      # starting animation speed (adjustable with the slid
 <p class="muted">Newest first. Each entry says what changed in the code and which chapters were updated.</p>
 <table>
   <tr><th style="width:18%">Date</th><th>Change</th></tr>
+  <tr><td>2026-11-26</td><td>Experimental simulation ("what if?"): new <code>experiments.py</code> with mass, G and speed changes, seven presets,
+  adaptive time steps and momentum-conserving collisions; orange sidebar section and HUD badge (<code>visualize.py</code>, <code>ui_theme.py</code>);
+  <code>Simulation.alive</code> and <code>slow_lag</code>; destroyed asteroids hidden (<code>swarm_view.py</code>). Presets checked against theory
+  (e.g. Earth stopped → hits the Sun after 63.0 days, predicted 63.0). New Part IX (Section 35). Updated: Sections 26, 27.</td></tr>
   <tr><td>2026-11-24</td><td>Self-updating <code>README.md</code> for GitHub (new <code>docs/build_readme.py</code> and <code>.github/workflows/readme.yml</code>):
   generated architecture diagram, file table, settings, accuracy table, automated screenshots. Corrected the forward-Euler result to the re-measured
   5 430 000 km (Sections 14, 15, 30). Updated: Sections 3, 26.</td></tr>

@@ -80,6 +80,10 @@ class Simulation:
         self.slow = np.flatnonzero(in_swarm)
         self.slow_every = max(1, round(SLOW_LANE_STEP / self.dt))  # fast steps per slow step
         self._fast_steps_done = 0
+        self.slow_lag = 0.0          # seconds the slow lane is behind (see slow_lane_lag)
+        # False once a body has been destroyed in a collision. Only experiments
+        # (experiments.py) can cause that; the real Solar System has none.
+        self.alive = np.ones(len(self.bodies), dtype=bool)
 
     def add_body(self, body: Body):
         """
@@ -143,19 +147,21 @@ class Simulation:
             if self._fast_steps_done == self.slow_every:
                 self._step_slow_lane()
                 self._fast_steps_done = 0
+        self.slow_lag = self._fast_steps_done * self.dt
 
     def slow_lane_lag(self):
         """How far (seconds) the slow lane is behind the fast lane right now (< 1 day)."""
-        return self._fast_steps_done * self.dt
+        return self.slow_lag
 
-    def _step_slow_lane(self):
+    def _step_slow_lane(self, h=None):
         """
         One velocity Verlet step of length h for the swarm, done when the fast
         lane has just reached the END of that step. So the kicks use the
         planets' pull at the start (stored in self.acc) and at the end (now).
+        h defaults to one slow-lane day.
         """
         s = self.slow
-        h = self.slow_every * self.dt
+        h = self.slow_every * self.dt if h is None else h
         sources = np.flatnonzero(self.gravity_masses)
         half_vel = self.velocities[s] + 0.5 * h * self.acc[s]           # kick (old pull)
         self.positions[s] += h * half_vel                                 # drift
