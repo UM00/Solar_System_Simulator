@@ -83,7 +83,7 @@
   <p>This document explains everything in this project: what each file does, the physics behind every
   line, and why it's built the way it is. It's also a general introduction to how solar system
   simulators work. You should be able to read it start to finish and then build one of your own.</p>
-  <p><b>Built:</b> 2026-11-26 10:51 &nbsp;·&nbsp; <b>Code version:</b> git commit <code>9358b8d</code> (plus uncommitted changes)</p><table class='small'><tr><th>File</th><th>Lines</th></tr><tr><td><code>body.py</code></td><td>78</td></tr><tr><td><code>camera.py</code></td><td>316</td></tr><tr><td><code>check_accuracy.py</code></td><td>119</td></tr><tr><td><code>data_sources.py</code></td><td>572</td></tr><tr><td><code>experiments.py</code></td><td>300</td></tr><tr><td><code>integrator.py</code></td><td>69</td></tr><tr><td><code>main.py</code></td><td>101</td></tr><tr><td><code>nasa_api.py</code></td><td>402</td></tr><tr><td><code>orbital_elements.py</code></td><td>122</td></tr><tr><td><code>physics.py</code></td><td>170</td></tr><tr><td><code>rings.py</code></td><td>111</td></tr><tr><td><code>simulation.py</code></td><td>186</td></tr><tr><td><code>starfield.py</code></td><td>92</td></tr><tr><td><code>swarm_view.py</code></td><td>150</td></tr><tr><td><code>trails.py</code></td><td>140</td></tr><tr><td><code>ui_theme.py</code></td><td>230</td></tr><tr><td><code>visualize.py</code></td><td>552</td></tr></table>
+  <p><b>Built:</b> 2026-11-27 19:17 &nbsp;·&nbsp; <b>Code version:</b> git commit <code>3e0c5b0</code> (plus uncommitted changes)</p><table class='small'><tr><th>File</th><th>Lines</th></tr><tr><td><code>body.py</code></td><td>78</td></tr><tr><td><code>camera.py</code></td><td>321</td></tr><tr><td><code>check_accuracy.py</code></td><td>119</td></tr><tr><td><code>data_sources.py</code></td><td>586</td></tr><tr><td><code>experiments.py</code></td><td>300</td></tr><tr><td><code>integrator.py</code></td><td>69</td></tr><tr><td><code>main.py</code></td><td>101</td></tr><tr><td><code>nasa_api.py</code></td><td>408</td></tr><tr><td><code>orbital_elements.py</code></td><td>122</td></tr><tr><td><code>physics.py</code></td><td>174</td></tr><tr><td><code>rings.py</code></td><td>114</td></tr><tr><td><code>simulation.py</code></td><td>186</td></tr><tr><td><code>starfield.py</code></td><td>94</td></tr><tr><td><code>swarm_view.py</code></td><td>176</td></tr><tr><td><code>trails.py</code></td><td>140</td></tr><tr><td><code>ui_theme.py</code></td><td>230</td></tr><tr><td><code>visualize.py</code></td><td>584</td></tr></table>
   <p class="muted" style="font-size:9pt">The source of this PDF is <code>docs/source/guide.html</code>. Rebuild with
   <code>python docs/build_docs.py</code>. Appendix A (code reference) and Appendix B (current settings) are generated
   from the code at build time, so they always match the code.</p>
@@ -724,6 +724,41 @@ the cost is N × M instead of N × N. Measured with 3,019 bodies of which 22 pul
 galaxy simulations use this, often on GPUs.</li>
 </ul>
 
+<h3>Making the whole program light: measure first</h3>
+<p>The golden rule of optimizing: <b>measure before changing anything</b>, because the slow part is rarely where you'd guess. A profiler
+(Python's built-in <code>cProfile</code>) records how long every function takes. A second counter recorded every message Python sends to
+the browser. One minute of the running program showed:</p>
+<ul>
+<li><b>Messages were the real cost.</b> ~336 per frame, and VPython <i>deep-copies</i> its whole list of pending messages each time the browser
+collects them, so every message costs work in Python <i>and</i> in the browser.</li>
+<li><b>Much of it was invisible work.</b> 53 messages per frame spun 26 plain-coloured spheres, but a uniformly coloured ball looks
+identical however far it has turned. 56 more moved spheres and labels by fractions of a pixel.</li>
+</ul>
+<p>The fixes, each a general technique worth knowing:</p>
+<table>
+  <tr><th style="width:30%">Technique</th><th>Here</th></tr>
+  <tr><td><b>Skip invisible work</b></td><td>Only textured bodies (Earth) are spun on screen. A sphere, label, ring or star sphere is only moved when the
+  move would be visible (more than ~1/3 pixel: 0.0005 × its distance from the camera). A still camera sends nothing.</td></tr>
+  <tr><td><b>Send only what changed</b> ("dirty checking")</td><td>For the belt, NumPy compares every dot's position and size with what the browser is
+  showing and sends only those that visibly changed, most-changed first, at most 150 per frame.</td></tr>
+  <tr><td><b>Fewer temporary arrays</b></td><td>Gravity uses <code>einsum</code> on squared distances instead of norm → cube → sum: 2× faster, identical results
+  (Section 25).</td></tr>
+  <tr><td><b>Lazy loading</b></td><td>The ~0.8 s <code>astropy</code> library is only imported when NASA data really has to be downloaded (a date → Julian Day
+  conversion was all it was needed for otherwise; plain Python gives identical numbers). The networking library loads only on a cache miss.
+  The 1,500-star background and the belt's dots are built a few frames <i>after</i> the Solar System appears, and a belt you've hidden is never built.</td></tr>
+</table>
+<table>
+  <tr><th>Same 60 s, same (slow, software-rendering) test browser</th><th>Before</th><th>After</th></tr>
+  <tr><td>Frames drawn</td><td>35</td><td><b>127</b> (3.6×)</td></tr>
+  <tr><td>Time until the page is ready</td><td>19.8 s</td><td><b>11.7 s</b></td></tr>
+  <tr><td>Messages per frame</td><td>336</td><td><b>195</b></td></tr>
+  <tr><td>Python time per physics step / per redraw</td><td>4.0 ms / 197 ms</td><td><b>1.3 ms / 43 ms</b></td></tr>
+  <tr><td>Python start-up with cached data</td><td>~1.0 s</td><td><b>0.6 s</b></td></tr>
+</table>
+<p>None of this changes the physics: Earth still lands 109 km from NASA after a year, and the "Stop Earth" experiment still takes 63.0 days.
+One lesson from doing it: importing a module <i>inside</i> a function (<code>import urllib.request</code>) makes that name local to the <b>whole</b>
+function, which broke an earlier line using <code>urllib.parse</code>. Importing the needed names directly (<code>from urllib.request import urlopen</code>) avoids that trap.</p>
+
 <h2 id="s18">18. Beyond this project: better integrators</h2>
 <table>
   <tr><th>Method</th><th>Idea</th><th>When to use</th></tr>
@@ -872,10 +907,13 @@ src_pos = positions[sources]                           # shape (M, 3)
 diff = src_pos[np.newaxis, :, :] - positions[:, np.newaxis, :]   # shape (N, M, 3)
 # diff[i, k] = arrow from body i to source k, for ALL pairs, like a multiplication table:
 #               rows = "who is pulled", columns = "who pulls"
-dist = np.linalg.norm(diff, axis=2)      # (N, M) table of distances
-dist[dist == 0] = np.inf                 # a body to itself = infinity, so 1/inf = 0, no self-pull
-pull = src_masses[None, :, None] * inv_r3[:, :, None] * diff
-acc  = G * pull.sum(axis=1)              # add up each row: total pull on each body</pre>
+r2 = np.einsum("ijk,ijk->ij", diff, diff)   # (N, M) table of SQUARED distances (x²+y²+z²)
+r2[r2 == 0] = np.inf                     # a body to itself = infinity, so 1/inf = 0, no self-pull
+weight = src_masses[None, :] / (r2 * np.sqrt(r2))     # m / r³ for every pair
+acc = G * np.einsum("ij,ijk->ik", weight, diff)       # weight × arrow, added up along each row</pre>
+<p><code>einsum</code> ("Einstein summation") describes a calculation by its index letters: <code>"ijk,ijk->ij"</code> means "for every
+<i>i, j</i>, add up over <i>k</i>". It does the multiply-and-add in one pass without building big temporary arrays, which made this
+function 2× faster (Section 17).</p>
 
 <h2 id="s26">26. Every file explained</h2>
 
@@ -1345,6 +1383,7 @@ Private helpers (names starting with "_") are left out.</p>
 <div class='ref'><code class='sig'>make_small_body_from_record(record, date)</code><div class='refdoc'>Build an asteroid/comet Body from a nasa_api.query_small_bodies() result.</div></div>
 <div class='ref'><code class='sig'>build_system(date, planet_names, moons=None, small_body_queries=(), extra_small_bodies=(), swarms=())</code><div class='refdoc'>Assemble a whole simulation in one call.</div></div>
 <div class='ref'><code class='sig'>make_swarm(spec, date, sun, skip_ids=(), skip_names=())</code><div class='refdoc'>Build a crowd of asteroid Bodies from ONE NASA request, e.g. {"label": "Main belt", "sb_class": "IMB,MBA,OMB", "count": 2000}</div></div>
+<div class='ref'><code class='sig'>julian_date(date)</code><div class='refdoc'>"2026-01-01" (or "2026-01-01 12:00") -&gt; Julian Day number, the continuous day count astronomers use (JD 2451544.5 = midnight starting 1 Jan 2000).</div></div>
 <div class='ref'><code class='sig'>pole_vector(name, date)</code><div class='refdoc'>Unit vector of a body's NASA/IAU north pole, in OUR ecliptic frame.</div></div>
 <div class='ref'><code class='sig'>assign_spin_axes(bodies, date)</code><div class='refdoc'>Give the Sun, planets and Moon their REAL spin-axis directions.</div></div>
 <div class='ref'><code class='sig'>suggest_time_step(bodies, steps_per_orbit=100)</code><div class='refdoc'>The largest SAFE time step (seconds) for these bodies.</div></div>
@@ -1398,7 +1437,7 @@ Private helpers (names starting with "_") are left out.</p>
 <div class='ref'><code class='sig'>orient(obj, from_axis, to_axis, origin)</code><div class='refdoc'>Rotate obj so that its from_axis points along to_axis (shortest turn).</div></div>
 <div class='ref'><code class='sig'>class SaturnRings</code><div class='refdoc'></div></div>
 <div class='ref'><code class='sig'>SaturnRings.__init__(self, planet_sphere, spin_axis_scene, planet_radius_km)</code><div class='refdoc'>planet_sphere    : Saturn's drawn sphere spin_axis_scene  : Saturn's spin axis in screen coordinates planet_radius_km : the radius Saturn's sphere is drawn for (mean radius)</div></div>
-<div class='ref'><code class='sig'>SaturnRings.update(self)</code><div class='refdoc'>Ride along with Saturn (the ring plane's direction stays fixed in space).</div></div>
+<div class='ref'><code class='sig'>SaturnRings.update(self)</code><div class='refdoc'>Ride along with Saturn (the ring plane's direction stays fixed in space). Only sends updates when Saturn has actually been moved (see visualize._redraw).</div></div>
 <div class='ref'><code class='sig'>SaturnRings.set_visible(self, on)</code></div>
 <h3 class='refmod'>simulation.py</h3>
 <p class='refsummary'>simulation.py - holds all the bodies and runs time forward.</p>
@@ -1417,14 +1456,14 @@ Private helpers (names starting with "_") are left out.</p>
 <p class='refsummary'>starfield.py - a background of distant stars (and a faint Milky Way band).</p>
 <div class='ref'><code class='sig'>class StarField</code><div class='refdoc'></div></div>
 <div class='ref'><code class='sig'>StarField.__init__(self, count=1500, seed=7)</code></div>
-<div class='ref'><code class='sig'>StarField.follow(self, camera_pos, look_distance)</code><div class='refdoc'>Keep the sky centred on the camera and inside VPython's drawing range.</div></div>
+<div class='ref'><code class='sig'>StarField.follow(self, camera_pos, look_distance)</code><div class='refdoc'>Keep the sky centred on the camera and inside VPython's drawing range. Sends nothing when the camera hasn't moved (no message = no work).</div></div>
 <div class='ref'><code class='sig'>StarField.visible(self)</code></div>
 <div class='ref'><code class='sig'>StarField.visible(self, value)</code></div>
 <h3 class='refmod'>swarm_view.py</h3>
 <p class='refsummary'>swarm_view.py - draws crowds of thousands of asteroids (the asteroid belt, Jupiter's trojans) as clouds of dots.</p>
 <div class='ref'><code class='sig'>class SwarmClouds</code><div class='refdoc'></div></div>
 <div class='ref'><code class='sig'>SwarmClouds.__init__(self, sim, to_scene_array)</code><div class='refdoc'>sim            : the Simulation to_scene_array : function turning an (N, 3) array of simulation positions into (N, 3) screen coordinates</div></div>
-<div class='ref'><code class='sig'>SwarmClouds.update(self, moved=True)</code><div class='refdoc'>Call EVERY frame (also while paused). Sends the next DOTS_PER_FRAME dots' positions and sizes. moved=False (paused) skips the work unless a size change still has to reach every dot. Found by testing: when updates only ran while the simulation moved, dots sized for a far-away view stayed huge after flying in while paused.</div></div>
+<div class='ref'><code class='sig'>SwarmClouds.update(self, camera_pos)</code><div class='refdoc'>Call EVERY frame (also while paused). Sends only the dots whose picture has really changed, up to DOTS_PER_FRAME, most-changed first.</div></div>
 <div class='ref'><code class='sig'>SwarmClouds.update_size(self, camera_pos, sun_pos)</code><div class='refdoc'>Keep dots looking the same size wherever the camera is (see the top). Found by testing: changing the whole cloud's radius does NOT resize dots that already exist. So the size travels with each dot's position update instead, and every dot catches up within one refresh cycle.</div></div>
 <div class='ref'><code class='sig'>SwarmClouds.labels(self)</code><div class='refdoc'>The swarm names, e.g. ["Main belt", "Jupiter trojans"].</div></div>
 <div class='ref'><code class='sig'>SwarmClouds.set_visible(self, label, on)</code></div>
@@ -1506,6 +1545,10 @@ DAYS_PER_SECOND = 10.0      # starting animation speed (adjustable with the slid
 <p class="muted">Newest first. Each entry says what changed in the code and which chapters were updated.</p>
 <table>
   <tr><th style="width:18%">Date</th><th>Change</th></tr>
+  <tr><td>2026-11-27</td><td>Performance: measured with a profiler, then sends only visible changes (no spinning of plain spheres, sub-pixel moves
+  skipped, belt dots dirty-checked, still camera/stars send nothing), 2× faster gravity with <code>einsum</code>, lazy loading of astropy (new
+  <code>data_sources.julian_date</code>) and networking, star background and belt dots built after the first frames. 3.6× more frames, 42% fewer
+  messages, physics results unchanged. Updated: Section 17 (new "Making the whole program light"), Section 25 code sample.</td></tr>
   <tr><td>2026-11-26</td><td>Experimental simulation ("what if?"): new <code>experiments.py</code> with mass, G and speed changes, seven presets,
   adaptive time steps and momentum-conserving collisions; orange sidebar section and HUD badge (<code>visualize.py</code>, <code>ui_theme.py</code>);
   <code>Simulation.alive</code> and <code>slow_lag</code>; destroyed asteroids hidden (<code>swarm_view.py</code>). Presets checked against theory

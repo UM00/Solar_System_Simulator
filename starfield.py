@@ -76,8 +76,10 @@ class StarField:
         self._scale = 1.0
 
     def follow(self, camera_pos, look_distance):
-        """Keep the sky centred on the camera and inside VPython's drawing range."""
-        self.obj.pos = camera_pos
+        """Keep the sky centred on the camera and inside VPython's drawing range.
+        Sends nothing when the camera hasn't moved (no message = no work)."""
+        if not self.obj.pos.equals(camera_pos):
+            self.obj.pos = camera_pos
         scale = RADIUS_FACTOR * look_distance / BASE_RADIUS
         if abs(scale - self._scale) > 0.03 * self._scale:
             self._scale = scale

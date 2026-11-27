@@ -138,6 +138,7 @@ class FlyCamera:
         self.look_distance = 1.0
         self._range_sent = False
         self._last_forward = None
+        self._last_center = None
 
         scene.bind("mousedown", self._mouse_down)
         scene.bind("mouseup", self._mouse_up)
@@ -310,7 +311,11 @@ class FlyCamera:
             self._last_forward = f
         # VPython puts its camera at: center - forward * range / tan(fov/2).
         # Setting center and range like this puts it exactly at self.pos.
-        self.scene.center = self.pos + f * self.look_distance
+        # (Only sent when it changed: a still camera sends nothing.)
+        center = self.pos + f * self.look_distance
+        if self._last_center is None or not center.equals(self._last_center) or resend:
+            self.scene.center = center
+            self._last_center = center
         if resend:
             self.scene.range = self.look_distance * math.tan(self.scene.fov / 2)
             self._range_sent = True

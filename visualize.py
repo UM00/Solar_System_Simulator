@@ -59,6 +59,7 @@ from vpython import (
     color,
     label,
     local_light,
+    mag,
     menu,
     rate,
     slider,
@@ -88,6 +89,8 @@ MIN_SIZE = 0.012             # smallest drawn radius, so small moons/asteroids s
 MOON_ZONE = 3.0
 MOON_GAMMA = 0.25
 SLIDER_LENGTH = 290          # pixels, to fit the sidebar
+POSITION_TOLERANCE = 0.0005  # skip moves smaller than this x distance to camera (~1/3 pixel)
+LAZY_AFTER_FRAMES = 10       # build the star background and belt dots after this many frames
 
 
 def to_scene(p):
@@ -150,7 +153,12 @@ class SolarSystemView:
         self.labels_on = True
         self._hidden = set()             # bodies hidden because they were destroyed
         self._last_status = None
-        self.stars = StarField()
+        # LAZY LOADING: the 1,500-star background is built a few frames AFTER
+        # the Solar System first appears (see run()), so you see something
+        # sooner. Building it means 1,500 objects merged into one in the browser.
+        self.stars = None
+        self._stars_wanted = True
+        self._frame = 0
         self.trails = OrbitTrails(sim, self.spheres)
         self.camera = FlyCamera(self.scene)
         self._fit_camera()
@@ -329,7 +337,7 @@ class SolarSystemView:
         self.g_slider.value = math.log10(self.lab.g_scale)
         self.g_text.text = f"x{self.lab.g_scale:g}"
         self._update_mass_text()
-        self._redraw(0)
+        self._redraw(0, force=True)
 
     def _choose_exp_body(self, m):
         self.exp_body = m.selected
@@ -369,7 +377,7 @@ class SolarSystemView:
         self.g_slider.value = 0
         self.g_text.text = "x1 (real)"
         self._update_mass_text()
-        self._redraw(0)
+        self._redraw(0, force=True)
 
     # ------------------------------------------------------------ controls
     def _toggle_pause(self, b):
@@ -416,7 +424,9 @@ class SolarSystemView:
             lab.visible = cb.checked and self.sim.alive[self.sim.index(name)]
 
     def _toggle_stars(self, cb):
-        self.stars.visible = cb.checked
+        self._stars_wanted = cb.checked
+        if self.stars:
+            self.stars.visible = cb.checked
 
     # ------------------------------------------------------------ drawing
     def _scene_position(self, i, body, positions_by_name):
@@ -452,8 +462,24 @@ class SolarSystemView:
             return to_scene(parent_pos) + direction * q_drawn * self.spheres[body.parent].radius
         return to_scene(pos)
 
-    def _redraw(self, seconds_advanced):
+    def _redraw(self, seconds_advanced, force=False):
+        """
+        Move (and spin) the spheres to match the simulation.
+
+        SEND ONLY WHAT YOU COULD SEE (measured: ~336 messages per frame before).
+        Every change costs a message to the browser, and VPython copies its
+        whole message list each time the browser collects it, so needless
+        messages cost time on BOTH sides. Two rules:
+          - A sphere is only moved when the move would be visible: at least
+            POSITION_TOLERANCE x its distance from the camera, about a third of
+            a pixel. Distant planets crawl, so most frames they're skipped.
+          - Only TEXTURED bodies (Earth) are spun on screen. A plain-coloured
+            sphere looks exactly the same however far it has turned, so
+            rotating it was 2 messages per body per frame for nothing visible.
+        force=True moves everything (used after presets and resets).
+        """
         positions_by_name = {b.name: self.sim.positions[i] for i, b in self.drawn}
+        cam = self.camera.pos
         for i, body in self.drawn:
             s = self.spheres[body.name]
             # Destroyed in an experiment (collision)? Hide it; show it again after a reset.
@@ -464,19 +490,21 @@ class SolarSystemView:
                 (self._hidden.discard if alive else self._hidden.add)(body.name)
             if not alive:
                 continue
-            s.pos = self._scene_position(i, body, positions_by_name)
-            self.labels[body.name].pos = s.pos
+            new_pos = self._scene_position(i, body, positions_by_name)
+            if force or mag(new_pos - s.pos) > POSITION_TOLERANCE * mag(new_pos - cam):
+                s.pos = new_pos
+                self.labels[body.name].pos = new_pos
+                if self.sun_light is not None and body.radius > 1e8:
+                    self.sun_light.pos = new_pos
 
-            # ROTATION: turn by (time passed / spin period) of a full circle.
-            # rotate() uses the right-hand rule, so a positive angle is a
-            # counter-clockwise spin seen from the north, which is how
-            # Earth spins (the Sun rises in the east).
-            if body.rotation_period and seconds_advanced > 0:
+            # ROTATION (textured bodies only, see above): turn by
+            # (time passed / spin period) of a full circle. rotate() uses the
+            # right-hand rule, so a positive angle is a counter-clockwise spin
+            # seen from the north, which is how Earth spins (the Sun rises in
+            # the east).
+            if body.texture and body.rotation_period and seconds_advanced > 0:
                 angle = 2 * math.pi * seconds_advanced / body.rotation_period
                 s.rotate(angle=angle, axis=self.spin_axes[body.name], origin=s.pos)
-
-            if self.sun_light is not None and body.radius > 1e8:
-                self.sun_light.pos = s.pos
         if self.rings:
             self.rings.update()
 
@@ -539,13 +567,17 @@ class SolarSystemView:
                         self.sim.step(n_steps)
                     self._redraw(n_steps * dt)
                     self.trails.update(self.sim.time)
-            else:
-                n_steps = 0
-            self.swarms.update(moved=n_steps > 0)
+            if self._frame >= LAZY_AFTER_FRAMES:   # belt dots are created lazily too
+                self.swarms.update(self.camera.pos)   # sends only dots that visibly changed
             # The camera keeps working while paused, so you can fly around a
             # frozen Solar System. Its clock is REAL time, not simulated time.
             self.camera.update(real_dt, self.spheres.values())
-            self.stars.follow(self.camera.pos, self.camera.look_distance)
+            self._frame += 1
+            if self.stars is None and self._frame >= LAZY_AFTER_FRAMES:   # lazy loading (see __init__)
+                self.stars = StarField()
+                self.stars.visible = self._stars_wanted
+            if self.stars:
+                self.stars.follow(self.camera.pos, self.camera.look_distance)
             self.trails.update_widths(self.camera.pos)
             if "Sun" in self.spheres:
                 self.swarms.update_size(self.camera.pos, self.spheres["Sun"].pos)

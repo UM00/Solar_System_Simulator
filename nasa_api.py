@@ -45,7 +45,6 @@ import hashlib
 import json
 import re
 import urllib.parse
-import urllib.request
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -78,8 +77,15 @@ def _fetch_text(url, params=None, refresh=False):
     if path.exists() and not refresh:
         return path.read_text(encoding="utf-8")
 
-    request = urllib.request.Request(url, headers={"User-Agent": "solar-system-simulator"})
-    with urllib.request.urlopen(request, timeout=60) as response:
+    # LAZY LOADING: the networking library is only imported when something
+    # really has to be downloaded. With a warm cache it's never loaded at all.
+    # (Imported by name: writing "import urllib.request" inside this function
+    # would make "urllib" a LOCAL name for the whole function, and the
+    # urllib.parse line above would then fail. A classic Python scoping trap.)
+    from urllib.request import Request, urlopen
+
+    request = Request(url, headers={"User-Agent": "solar-system-simulator"})
+    with urlopen(request, timeout=60) as response:
         text = response.read().decode("utf-8")
 
     CACHE_DIR.mkdir(parents=True, exist_ok=True)

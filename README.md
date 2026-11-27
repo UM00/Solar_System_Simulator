@@ -9,7 +9,7 @@ The planets, moons, asteroid belt and Saturn's rings all start from **NASA/JPL's
 ![Inner Solar System with the asteroid belt](docs/images/overview.jpg)
 
 <!-- AUTO:STATS -->
-**17 Python files · 3,710 lines**, most of them comments explaining the physics for beginners.
+**17 Python files · 3,802 lines**, most of them comments explaining the physics for beginners.
 <!-- /AUTO:STATS -->
 
 ---
@@ -213,22 +213,22 @@ DAYS_PER_SECOND = 10.0      # starting animation speed (adjustable with the slid
 | File | What it does | Lines |
 |---|---|---:|
 | [`body.py`](body.py) | the one data type every object in the simulator shares. | 78 |
-| [`camera.py`](camera.py) | a free-flying "spaceship" camera with inertia. | 316 |
+| [`camera.py`](camera.py) | a free-flying "spaceship" camera with inertia. | 321 |
 | [`check_accuracy.py`](check_accuracy.py) | is the simulator right? Measure it, don't eyeball it. | 119 |
-| [`data_sources.py`](data_sources.py) | real data from NASA, turned into Body objects. | 572 |
+| [`data_sources.py`](data_sources.py) | real data from NASA, turned into Body objects. | 586 |
 | [`experiments.py`](experiments.py) | the "what if?" laboratory. | 300 |
 | [`integrator.py`](integrator.py) | moving time forward by one small step `dt`. | 69 |
 | [`main.py`](main.py) | start the 3D Solar System. | 101 |
-| [`nasa_api.py`](nasa_api.py) | one simple doorway to NASA/JPL data on moons, asteroids and comets. | 402 |
+| [`nasa_api.py`](nasa_api.py) | one simple doorway to NASA/JPL data on moons, asteroids and comets. | 408 |
 | [`orbital_elements.py`](orbital_elements.py) | from the six numbers that describe an orbit to a | 122 |
-| [`physics.py`](physics.py) | Newtonian gravity for any number of bodies. | 170 |
-| [`rings.py`](rings.py) | Saturn's rings, drawn from NASA's measured ring data. | 111 |
+| [`physics.py`](physics.py) | Newtonian gravity for any number of bodies. | 174 |
+| [`rings.py`](rings.py) | Saturn's rings, drawn from NASA's measured ring data. | 114 |
 | [`simulation.py`](simulation.py) | holds all the bodies and runs time forward. | 186 |
-| [`starfield.py`](starfield.py) | a background of distant stars (and a faint Milky Way band). | 92 |
-| [`swarm_view.py`](swarm_view.py) | draws crowds of thousands of asteroids (the asteroid belt, | 150 |
+| [`starfield.py`](starfield.py) | a background of distant stars (and a faint Milky Way band). | 94 |
+| [`swarm_view.py`](swarm_view.py) | draws crowds of thousands of asteroids (the asteroid belt, | 176 |
 | [`trails.py`](trails.py) | orbit trails that show about the last TWO orbits of each body, | 140 |
 | [`ui_theme.py`](ui_theme.py) | restyles VPython's web page: full-window 3D view, a slide-out | 230 |
-| [`visualize.py`](visualize.py) | the 3D view, drawn with VPython (opens in a browser tab). | 552 |
+| [`visualize.py`](visualize.py) | the 3D view, drawn with VPython (opens in a browser tab). | 584 |
 <!-- /AUTO:MODULES -->
 
 ## 🔄 This README updates itself

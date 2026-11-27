@@ -440,8 +440,6 @@ def make_swarm(spec, date, sun, skip_ids=(), skip_names=()):
     Members are test particles (pulled, not pulling) with swarm=label, so
     they are drawn as dots in one cloud (see visualize.py).
     """
-    from astropy.time import Time
-
     from orbital_elements import elements_to_state, propagate_mean_anomaly
 
     el = nasa_api.query_orbital_elements(spec.get("sb_class", "IMB,MBA,OMB"), spec.get("count", 2000))
@@ -453,7 +451,7 @@ def make_swarm(spec, date, sun, skip_ids=(), skip_names=()):
 
     mu = G * sun.mass                       # heliocentric orbits: the Sun does the pulling
     a = arr("a_au") * AU
-    days_since_epoch = Time(date, scale="tdb").jd - arr("epoch_jd")
+    days_since_epoch = julian_date(date) - arr("epoch_jd")
     M = propagate_mean_anomaly(np.radians(arr("ma_deg")), a, mu, days_since_epoch * DAY)
     pos, vel = elements_to_state(a, arr("e"), np.radians(arr("i_deg")), np.radians(arr("om_deg")),
                                  np.radians(arr("w_deg")), M, mu)
@@ -469,6 +467,24 @@ def make_swarm(spec, date, sun, skip_ids=(), skip_names=()):
     ]
 
 
+def julian_date(date):
+    """
+    "2026-01-01" (or "2026-01-01 12:00") -> Julian Day number, the continuous
+    day count astronomers use (JD 2451544.5 = midnight starting 1 Jan 2000).
+
+    LAZY LOADING: this used to call astropy's Time class, which takes ~0.8 s
+    just to import, on EVERY start, even when all NASA data was cached.
+    Counting days from a known date is all that's needed, so plain Python
+    does it and astropy is only loaded when NASA data actually has to be
+    downloaded (fetch_state_vector). The date is read in TDB, the same time
+    scale as before, so the result is identical.
+    """
+    from datetime import datetime
+
+    days = (datetime.fromisoformat(str(date)) - datetime(2000, 1, 1)).total_seconds() / 86400.0
+    return 2451544.5 + days
+
+
 def pole_vector(name, date):
     """
     Unit vector of a body's NASA/IAU north pole, in OUR ecliptic frame.
@@ -481,9 +497,7 @@ def pole_vector(name, date):
        equinox direction) and differ by Earth's axial tilt, 23.44 deg,
        so it's one rotation about x.
     """
-    from astropy.time import Time
-
-    T = (Time(date, scale="tdb").jd - 2451545.0) / 36525.0
+    T = (julian_date(date) - 2451545.0) / 36525.0
     if name == "Neptune":
         N = np.radians(357.85 + 52.316 * T)
         ra, dec = 299.36 + 0.70 * np.sin(N), 43.46 - 0.51 * np.cos(N)

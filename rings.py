@@ -102,7 +102,10 @@ class SaturnRings:
             self.parts.append(ring)
 
     def update(self):
-        """Ride along with Saturn (the ring plane's direction stays fixed in space)."""
+        """Ride along with Saturn (the ring plane's direction stays fixed in space).
+        Only sends updates when Saturn has actually been moved (see visualize._redraw)."""
+        if self.parts and self.parts[0].pos.equals(self.planet.pos):
+            return
         for ring in self.parts:
             ring.pos = self.planet.pos
 

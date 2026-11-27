@@ -19,12 +19,13 @@ HOW THE DOTS ARE UPDATED (all found by testing)
   Clearing and re-adding 3,000 points 15 times a second made the browser
   build and throw away 45,000 objects a second, and it froze. So the points
   are created ONCE and afterwards only MOVED (VPython's "modify" command).
-- Moving only a fixed number of dots per frame (DOTS_PER_FRAME, cycling
-  round-robin through the whole crowd) keeps the browser's work per frame
-  small and even. Moving ALL dots every few frames meant ~37,000 commands a
-  second; the browser was so busy that it stopped reporting key presses in
-  time, and the camera ignored the keyboard. With 150 per frame, a
-  1,800-asteroid crowd is fully refreshed 5 times a second.
+- Only dots whose picture has visibly CHANGED are sent (moved about a third
+  of a pixel, size out of date, or destroyed), at most DOTS_PER_FRAME per
+  frame, most-changed first. Moving ALL dots every few frames meant ~37,000
+  commands a second; the browser was so busy that it stopped reporting key
+  presses in time, and the camera ignored the keyboard. When paused, or
+  zoomed far out where the belt barely moves on screen, almost nothing is
+  sent at all.
 - The messages are built straight from NumPy arrays, skipping VPython's
   per-point vector objects. That cut the Python-side cost from about the
   cost of all the physics to ~1 ms per frame.
@@ -53,8 +54,9 @@ WHAT TO LOOK FOR
 import numpy as np
 from vpython import mag, points, vector
 
-DOTS_PER_FRAME = 150        # dots moved per frame, cycling through all swarms
+DOTS_PER_FRAME = 150        # at most this many dots sent per frame
 SIZE_PER_DISTANCE = 0.0016  # dot radius / (camera's distance from the Sun)
+POSITION_TOLERANCE = 0.0005 # a dot is re-sent once it has moved this x its distance from the camera
 
 
 def _send(cloud, method, val):
@@ -71,9 +73,7 @@ class SwarmClouds:
         """
         self.sim = sim
         self.to_scene_array = to_scene_array
-        self._cursor = 0          # where the round-robin refresh continues next frame
         self._radius = None
-        self._resize_left = 0     # dots still waiting for the latest size
         self.groups = {}
         for i, body in enumerate(sim.bodies):
             if body.swarm:
@@ -81,17 +81,27 @@ class SwarmClouds:
                 group["indices"].append(i)
 
         for group in self.groups.values():
-            idx = np.array(group["indices"])
-            group["indices"] = idx
-            cloud = points(color=vector(*group["color"]), radius=0.02, size_units="world", emissive=True)
-            # Create every dot ONCE, in a single message.
-            xyz = self._screen_positions(idx)
-            _send(cloud, "append", [{"pos": p} for p in xyz.tolist()])
-            group["cloud"] = cloud
+            group["indices"] = np.array(group["indices"])
             group["visible"] = True
+            group["cloud"] = None       # created lazily, on the first update() (see _create)
 
-        # One flat list of (group, dot number) to cycle through, all swarms together.
-        self._queue = [(g, n) for g in self.groups.values() for n in range(len(g["indices"]))]
+    def _create(self, group):
+        """
+        LAZY LOADING: the dots are only created the first time they're needed
+        (visualize.py starts updating them a few frames after the Solar System
+        appears), so the first picture shows up sooner.
+        """
+        idx = group["indices"]
+        cloud = points(color=vector(*group["color"]), radius=0.02, size_units="world", emissive=True)
+        # Create every dot ONCE, in a single message.
+        xyz = self._screen_positions(idx)
+        _send(cloud, "append", [{"pos": p} for p in xyz.tolist()])
+        cloud.visible = group["visible"]
+        group["cloud"] = cloud
+        # What the browser is currently showing for each dot (see update()).
+        group["sent_pos"] = xyz
+        group["sent_radius"] = np.full(len(idx), 0.02)
+        group["sent_alive"] = np.ones(len(idx), dtype=bool)
 
     def _screen_positions(self, idx):
         # The belt moves on its own slower clock (simulation.py) and can be up
@@ -101,30 +111,48 @@ class SwarmClouds:
         lag = self.sim.slow_lane_lag()
         return self.to_scene_array(self.sim.positions[idx] + self.sim.velocities[idx] * lag)
 
-    def update(self, moved=True):
+    def update(self, camera_pos):
         """
-        Call EVERY frame (also while paused). Sends the next DOTS_PER_FRAME
-        dots' positions and sizes. moved=False (paused) skips the work unless
-        a size change still has to reach every dot. Found by testing: when
-        updates only ran while the simulation moved, dots sized for a
-        far-away view stayed huge after flying in while paused.
+        Call EVERY frame (also while paused). Sends only the dots whose
+        picture has really changed, up to DOTS_PER_FRAME, most-changed first.
+
+        For ALL dots at once (NumPy, cheap) it compares where each dot is now
+        with what the browser is showing, and picks a dot if
+          - it has moved more than POSITION_TOLERANCE x its distance from the
+            camera (about a third of a pixel), or
+          - its size is out of date by more than 5% (the camera moved), or
+          - it was destroyed / revived in an experiment.
+        When paused, or zoomed far out where the belt barely moves on screen,
+        almost nothing is sent. Found by testing: before this, 150 dots were
+        sent every frame no matter what; and when updates only ran while the
+        simulation moved, dots sized for a far-away view stayed huge after
+        flying in while paused.
         """
-        if not self._queue or (not moved and self._resize_left <= 0):
-            return
-        self._resize_left -= DOTS_PER_FRAME
-        batch = [self._queue[(self._cursor + k) % len(self._queue)]
-                 for k in range(min(DOTS_PER_FRAME, len(self._queue)))]
-        self._cursor = (self._cursor + len(batch)) % len(self._queue)
+        cam = np.array([camera_pos.x, camera_pos.y, camera_pos.z])
+        r = self._radius or 0.02
+        budget = DOTS_PER_FRAME
         for group in self.groups.values():
-            numbers = [n for g, n in batch if g is group]
-            if not numbers or not group["visible"]:
+            if not group["visible"] or budget <= 0:
                 continue   # hidden swarms cost nothing: no updates sent
-            xyz = self._screen_positions(group["indices"][numbers])
+            if group["cloud"] is None:
+                self._create(group)
+                continue
+            idx = group["indices"]
+            xyz = self._screen_positions(idx)
+            alive = self.sim.alive[idx]                       # experiments can destroy asteroids
+            tolerance = POSITION_TOLERANCE * np.linalg.norm(xyz - cam, axis=1)
+            moved = np.linalg.norm(xyz - group["sent_pos"], axis=1) / np.maximum(tolerance, 1e-12)
+            stale = (moved > 1) | (np.abs(group["sent_radius"] - r) > 0.05 * r) | (alive != group["sent_alive"])
+            todo = np.flatnonzero(stale)
+            if todo.size > budget:                            # most-changed first
+                todo = todo[np.argsort(-moved[todo])[:budget]]
+            budget -= todo.size
             cloud = group["cloud"]
-            r = self._radius or 0.02
-            alive = self.sim.alive[group["indices"][numbers]].tolist()   # experiments can destroy asteroids
-            for n, p, a in zip(numbers, xyz.tolist(), alive):
+            for n, p, a in zip(todo.tolist(), xyz[todo].tolist(), alive[todo].tolist()):
                 _send(cloud, "modify", [n, [{"pos": p, "radius": r, "visible": a}]])
+            group["sent_pos"][todo] = xyz[todo]
+            group["sent_radius"][todo] = r
+            group["sent_alive"][todo] = alive[todo]
 
     def update_size(self, camera_pos, sun_pos):
         """
@@ -133,10 +161,7 @@ class SwarmClouds:
         dots that already exist. So the size travels with each dot's position
         update instead, and every dot catches up within one refresh cycle.
         """
-        wanted = SIZE_PER_DISTANCE * max(mag(camera_pos - sun_pos), 1e-6)
-        if self._radius is None or abs(wanted - self._radius) > 0.05 * self._radius:
-            self._radius = wanted
-            self._resize_left = len(self._queue)   # every dot needs the new size once
+        self._radius = SIZE_PER_DISTANCE * max(mag(camera_pos - sun_pos), 1e-6)
 
     def labels(self):
         """The swarm names, e.g. ["Main belt", "Jupiter trojans"]."""
@@ -144,7 +169,8 @@ class SwarmClouds:
 
     def set_visible(self, label, on):
         self.groups[label]["visible"] = on
-        self.groups[label]["cloud"].visible = on
+        if self.groups[label]["cloud"] is not None:
+            self.groups[label]["cloud"].visible = on
 
     def count(self, label):
         return len(self.groups[label]["indices"])
