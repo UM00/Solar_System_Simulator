@@ -93,7 +93,9 @@ def main():
     sim.move_to_center_of_mass()
 
     print("Opening the 3D view in your browser...")
-    view = SolarSystemView(sim, START_DATE, days_per_second=DAYS_PER_SECOND)
+    # rebuild: the same system on another date, for "Real events > Show me" (time travel).
+    rebuild = lambda date: build_system(date, BODY_NAMES, MOONS, SMALL_BODY_QUERIES, SMALL_BODIES, SWARMS)
+    view = SolarSystemView(sim, START_DATE, days_per_second=DAYS_PER_SECOND, rebuild=rebuild)
     view.run()
 
 

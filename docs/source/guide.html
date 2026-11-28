@@ -137,6 +137,8 @@
     <li class="sub"><a href="#s34">34. Further reading</a></li>
     <li class="tpart">Part IX: What if? Experimental simulation</li>
     <li class="sub"><a href="#s35">35. Changing the laws and watching what happens</a></li>
+    <li class="tpart">Part X: Predicting real events</li>
+    <li class="sub"><a href="#s36">36. Eclipses and an asteroid flyby, checked against NASA</a></li>
     <li class="tpart">Appendices</li>
     <li class="sub"><a href="#appA">A. Code reference (generated from the code)</a></li>
     <li class="sub"><a href="#appB">B. Current settings (generated from main.py)</a></li>
@@ -993,6 +995,13 @@ the camera (a "skybox", Section 28).</p>
 <p><code>ExperimentLab</code> changes masses, G and speeds, keeps a snapshot of the real state for "Back to the real Solar System",
 and runs experiments with adaptive time steps and collisions (<code>advance()</code>). <code>PRESETS</code> holds the one-click what-ifs (Section 35).</p>
 
+<h3><code>events.py</code>: predicting real events</h3>
+<p><code>EVENTS</code> lists five real events with NASA's published answers. <code>predict()</code> runs a separate, behind-the-scenes simulation
+from START_DATE to the event and finds its exact moment; <code>measure()</code> turns positions into the number that is smallest at the
+event (a distance, or an eclipse's gamma), with <code>shadow_positions()</code> correcting for the travel time of light.
+<code>watch_plan()</code> and <code>live_readout()</code> drive "Show me" (Section 36). <code>simulation.py</code> gained two helpers for it:
+<code>set_dt()</code> (change the time step mid-run) and <code>load_state()</code> (time travel: load NASA's positions for another date).</p>
+
 <h3><code>rings.py</code>: Saturn's rings</h3>
 <p><code>SaturnRings</code> builds one thin annulus per ring (C, B, Cassini Division, A, F) from NASA's ring table, sizes them to Saturn's drawn
 radius, tilts them to Saturn's real pole with <code>orient()</code>, and moves them with Saturn each frame (Sections 11 and 28).</p>
@@ -1347,6 +1356,96 @@ Jupiter grown 80× would really shrink slightly; a star would also start shining
 after a long time.</div>
 </section>
 
+<!-- ============================== PART X ============================== -->
+<section class="part">
+<div class="part-label">Part X</div>
+<h1>Predicting real events</h1>
+
+<h2 id="s36">36. Eclipses and an asteroid flyby, checked against NASA</h2>
+<p>A simulation is only worth trusting if it can predict something you can check. The sidebar's teal <b>🔭 Real events</b> section (click
+its title to open it) does exactly that for five real events. Pick one, then:</p>
+<ul>
+<li><b>Predict</b> starts a <i>separate</i> simulation behind the scenes, from NASA's positions on START_DATE (1 January 2026), and runs our
+own physics forward for months or years to the event. Then it puts our answer next to NASA's in a small table. Everything after the start
+date is ours, so this is an honest test. It runs on a <b>background thread</b> (a second line of work in the same program), so the 3D view
+keeps moving while it computes.</li>
+<li><b>Show me</b> "time-travels" the 3D view: it loads NASA's positions for every body at midnight of the event day, fast-forwards to
+3 hours before the event, slows time to 0.01 days per second (1 hour of sky in 4.2 seconds), follows Earth, and shows a teal badge with a
+live readout (the asteroid's distance, or the eclipse's gamma, with a countdown).</li>
+</ul>
+<p><b>Lazy, like the experiments:</b> nothing is computed or downloaded until you click. The first "Show me" for a date downloads NASA's
+positions for all bodies (about a minute); after that they are cached, like everything else from NASA.</p>
+
+<h3>The events</h3>
+<ul>
+<li><b>Asteroid 99942 Apophis, 13 April 2029.</b> An asteroid about 340 m wide passes 38,000 km from Earth's centre, closer than geostationary
+satellites (42,164 km), bright enough to see with the naked eye. We look for the moment the Earth–Apophis distance is smallest.
+NASA's answer comes from its close-approach database (CNEOS).</li>
+<li><b>Solar eclipses</b> on 12 August 2026 (total in Iceland and Spain) and 2 August 2027 (total in Egypt, 6 min 23 s, one of the longest
+of the century). <b>Lunar eclipses</b> on 3 March 2026 (total) and 28 August 2026 (partial). NASA's answers come from Fred Espenak's
+<i>Five Millennium Canon of Eclipses</i> (eclipse.gsfc.nasa.gov).</li>
+</ul>
+
+<h3>Gamma: how close is the shadow?</h3>
+<p>The Moon's shadow points along the line from the Sun through the Moon: the <b>shadow axis</b>. An eclipse happens when that line passes
+close to Earth. Astronomers measure "how close" with one number, <b>gamma</b>:</p>
+<div class="eq">γ = (shortest distance from Earth's centre to the shadow axis) / (Earth's equatorial radius, 6,378 km)</div>
+<p>γ = 0 means the shadow hits the middle of Earth's disc; γ near ±1 means it grazes the edge (close to a pole); much more than 1 means
+it misses Earth and there is no eclipse. Positive means the axis passes <b>north</b> of Earth's centre ("north" meaning along Earth's spin
+axis, Section 11). The moment γ is smallest is called <b>greatest eclipse</b>. A lunar eclipse is the same with the roles swapped:
+<i>Earth's</i> shadow points along the Sun→Earth line, and γ is the Moon's distance from it.</p>
+<p>The distance from a point to a line is a projection: take the vector from the Moon to Earth, remove its part
+along the axis, and what remains is the sideways offset. Our simulation knows all three positions, so it can compute γ at every step.</p>
+<p><b>Total or annular?</b> The Moon's dark shadow (the <b>umbra</b>) is a cone. Similar triangles give its length:
+umbra length = (Sun–Moon distance) × <i>R</i><sub>Moon</sub> / (<i>R</i><sub>Sun</sub> − <i>R</i><sub>Moon</sub>), about 374,000 km. The
+Moon is 357,000–406,000 km from Earth, so sometimes the tip reaches the ground (a <b>total</b> eclipse) and sometimes it stops short
+(an <b>annular</b> eclipse, a "ring of fire"). For a lunar eclipse we compare the Moon's offset with the radius of Earth's umbra at the
+Moon's distance, made 2% larger for Earth's atmosphere (the standard correction): fully inside = total, partly = partial.</p>
+
+<h3>Finding the exact moment</h3>
+<p>With 5-minute steps the answer would sit on a 5-minute grid. So the prediction runs normally until 2 days before NASA's date, then
+switches to 1-minute steps (<code>set_dt()</code>) and records distance² at every step for 4 days. Near the closest point the motion is
+almost a straight line, and then distance² = <i>d</i>₀² + <i>v</i>²(<i>t</i> − <i>t</i>₀)²: exactly a parabola in time. A parabola
+through the three smallest samples gives the moment to a fraction of a second. NASA's date only says <i>where to look</i> (a 4-day
+window); the simulation has to find the minute itself.</p>
+
+<h3>Light takes time: a 40-second lesson</h3>
+<p>The first version put every eclipse about 40 seconds too late. The cause was the speed of light. A shadow is made of light that is
+<i>not</i> there, and the shadow touching Earth now was cast by the Moon 1.3 seconds ago (the time light takes from the Moon to Earth). In
+those 1.3 s the Moon, racing around the Sun together with Earth at about 30 km/s, moved about 38 km, and the shadow crosses Earth at
+roughly 1 km/s: 38 km ≈ 38 s. So <code>shadow_positions()</code> uses where the bodies <i>were</i> when the light passed them (position −
+velocity × light travel time). Astronomers call this effect <b>aberration</b>. Measured with 15-minute steps, this one correction moved
+the four eclipses from +52, +87, +104 and +170 s to +12, +53, +63 and +137 s.</p>
+
+<h3>Results (measured, 5-minute steps)</h3>
+<table>
+  <tr><th style="width:27%">Event</th><th>Our moment vs NASA</th><th>Our γ / distance vs NASA</th><th>Type</th></tr>
+  <tr><td>Total lunar eclipse, 3 Mar 2026 (61 days)</td><td>+1.4 s</td><td>−0.3763 vs −0.3765 (1 km)</td><td>total ✓</td></tr>
+  <tr><td>Total solar eclipse, 12 Aug 2026 (224 days)</td><td>+12.7 s</td><td>+0.8982 vs +0.8977 (3 km)</td><td>total ✓</td></tr>
+  <tr><td>Partial lunar eclipse, 28 Aug 2026 (239 days)</td><td>+15.4 s</td><td>+0.4958 vs +0.4964 (4 km)</td><td>partial ✓</td></tr>
+  <tr><td>Total solar eclipse, 2 Aug 2027 (578 days)</td><td>+34.0 s</td><td>+0.1432 vs +0.1421 (7 km)</td><td>total ✓</td></tr>
+  <tr><td>Apophis flyby, 13 Apr 2029 (3.3 years)</td><td>−14.2 s</td><td>37,827 km vs 38,011 km (−184 km); speed 7.429 vs 7.423 km/s</td><td></td></tr>
+</table>
+<p>Every eclipse is found within a minute, with the shadow in the right place to within 7 km, and the right type. After 3.3 years Apophis is
+found 184 km (0.5%) closer than NASA predicts. On its own a prediction takes 1–23 seconds on the development laptop. Inside the running 3D view it is slower (the 2026 solar eclipse took 48 s), because Python lets only one thread run Python code at a time (the "GIL"), so the prediction takes turns with the 60-frames-a-second drawing loop. A first "Show me" for a date took about a minute to download from NASA; once cached, the jump took 39 s in the same test.</p>
+<p><b>Step size matters.</b> Measured for the 2027 eclipse: 15-minute steps put it +137 s off, 5-minute +34 s, 2-minute +23 s and 1-minute
++22 s. For the 2026 solar eclipse: +53, +13, +8.5 and +7.9 s. The error shrinks with the step at first (Section 16) and then levels off:
+that floor is no longer the integrator, it is the physics we leave out. 5-minute steps are the chosen balance (<code>PREDICTION_DT</code>).
+Apophis levels off at −14 s and −189 km.</p>
+<p><b>Show me checks the other way round:</b> starting from NASA's own positions on the day, the live readout at the event shows γ = +0.8977
+for 12 August 2026 and 38,012 km for Apophis, NASA's values. So the measuring code is right, and the small differences in the table really
+come from our physics over months and years.</p>
+<div class="callout warn"><span class="callout-title">Why the small differences remain</span>
+Our model is pure Newton with point masses. NASA's ephemeris also includes general relativity, the bulge of Earth and the Moon (their
+"J2"), tides (which slowly push the Moon away), and the pull of hundreds of asteroids; for Apophis also the tiny push from sunlight it
+re-emits as heat (the Yarkovsky effect). A difference that grows steadily with time, like ours (+1 s after 2 months, +34 s after
+19 months), is the signature of a slightly wrong orbital speed for the Moon, which is exactly what those missing effects cause. Times are
+in TDB/TD, the steady clock of the ephemerides (Section 10), not the UTC on your watch, which is about 69 s behind.</div>
+<div class="callout"><span class="callout-title">Two of these have already happened</span>
+The 3 March 2026 lunar eclipse and the 12 August 2026 solar eclipse are now in the past, and they happened as NASA predicted: our simulation,
+starting from 1 January 2026, "predicted" real history to within seconds.</div>
+</section>
+
 <!-- ============================== APPENDICES ============================== -->
 <section class="part">
 <div class="part-label">Appendix A</div>
@@ -1366,6 +1465,10 @@ Private helpers (names starting with "_") are left out.</p>
 <p class="muted">Newest first. Each entry says what changed in the code and which chapters were updated.</p>
 <table>
   <tr><th style="width:18%">Date</th><th>Change</th></tr>
+  <tr><td>2026-11-28</td><td>Real events: new <code>events.py</code> predicts the Apophis 2029 flyby and four eclipses (2026–2027) with a
+  behind-the-scenes simulation and compares with NASA (CNEOS, Five Millennium Canon), including a light-travel-time correction; "Show me"
+  time-travels the 3D view with a live readout. New <code>Simulation.set_dt()</code> and <code>load_state()</code>; the run loop now reads the
+  time step every frame; the sidebar fold code handles several sections. New Part X (Section 36); Sections 26 and contents updated.</td></tr>
   <tr><td>2026-11-27</td><td>Performance: measured with a profiler, then sends only visible changes (no spinning of plain spheres, sub-pixel moves
   skipped, belt dots dirty-checked, still camera/stars send nothing), 2× faster gravity with <code>einsum</code>, lazy loading of astropy (new
   <code>data_sources.julian_date</code>) and networking, star background and belt dots built after the first frames. 3.6× more frames, 42% fewer

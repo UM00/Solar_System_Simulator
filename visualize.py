@@ -48,6 +48,7 @@ starfield.py (background stars).
 """
 
 import math
+import threading
 import time
 from datetime import datetime, timedelta
 
@@ -113,9 +114,16 @@ def display_radius(body):
 
 
 class SolarSystemView:
-    def __init__(self, sim, start_date, days_per_second=10.0):
+    def __init__(self, sim, start_date, days_per_second=10.0, rebuild=None):
+        """
+        rebuild : optional function date -> list of Body, building the SAME
+                  system for another date. Used by "Real events > Show me" to
+                  time-travel (main.py passes build_system with its SETTINGS).
+        """
         self.sim = sim
+        self.start_date = start_date
         self.start = datetime.fromisoformat(start_date)
+        self.rebuild = rebuild
         self.days_per_second = days_per_second
         self.paused = False
         self.time_debt = 0.0  # simulated seconds owed but not yet stepped
@@ -151,6 +159,14 @@ class SolarSystemView:
         self.swarms = SwarmClouds(sim, to_scene_array)
         self.lab = ExperimentLab(sim)    # "what if?" experiments (experiments.py)
         self.labels_on = True
+        # Real events (events.py): one background job at a time, see _start_job.
+        self.evt_index = 0
+        self._job = None             # {"label", "progress", "result", "error", "done"}
+        self._pending_travel = None  # NASA bodies loaded by a "Show me" job, applied in run()
+        self.watching = None         # (event, its time) being watched, for the HUD readout
+        self._normal_dt = sim.dt
+        self._fine_until = None      # sim time after which normal time steps come back
+        self._last_evt_status = None
         self._hidden = set()             # bodies hidden because they were destroyed
         self._last_status = None
         # LAZY LOADING: the 1,500-star background is built a few frames AFTER
@@ -227,8 +243,8 @@ class SolarSystemView:
         self.speed_text = wtext(text="")
         sc.append_to_caption("\n")
         # Logarithmic slider: -2..2.5 -> 0.01 .. ~316 days per second
-        slider(min=-2, max=2.5, value=math.log10(self.days_per_second),
-               length=SLIDER_LENGTH, bind=self._set_speed)
+        self.speed_slider = slider(min=-2, max=2.5, value=math.log10(self.days_per_second),
+                                   length=SLIDER_LENGTH, bind=self._set_speed)
         self._update_speed_text()
 
         h("Camera")
@@ -269,6 +285,7 @@ class SolarSystemView:
         sc.append_to_caption("\n<span id='ss-fullscreen-slot'></span>")
 
         self._build_experiment_controls()
+        self._build_event_controls()
 
         h("Flying")
         sc.append_to_caption(
@@ -323,6 +340,130 @@ class SolarSystemView:
         self.exp_status = wtext(text="")
         sc.append_to_caption("<span id='ss-exp-end'></span>")
         self._update_mass_text()
+
+    def _build_event_controls(self):
+        """
+        The "Real events" section: predict eclipses and the Apophis flyby with
+        our own physics and compare with NASA (events.py). Folded like the
+        experiments section. LAZY: nothing is computed or downloaded until a
+        button is clicked; importing events.py only reads a short list.
+        """
+        import events
+        sc = self.scene
+        sc.append_to_caption("<div class='ss-h ss-evt-h'>&#128301; Real events</div>"
+                             "<span id='ss-evt-start'></span>")
+        sc.append_to_caption("<span class='ss-note'>Can our simulation predict the real sky? <b>Predict</b> runs "
+                             "our physics from NASA's " + self.start_date + " positions to the event and compares "
+                             "with NASA's answer. <b>Show me</b> jumps the 3D view to the event.</span>\n")
+        self.evt_menu = menu(choices=events.titles(), bind=self._choose_event)
+        sc.append_to_caption("\n")
+        button(text="Predict", bind=self._predict_event)
+        button(text="Show me", bind=self._watch_event)
+        sc.append_to_caption("\n")
+        self.evt_status = wtext(text="")
+        sc.append_to_caption("<span id='ss-evt-end'></span>")
+
+    # ------------------------------------------------------- real events
+    def _choose_event(self, m):
+        self.evt_index = m.index
+
+    def _start_job(self, label, work):
+        """
+        Run `work(job)` on a BACKGROUND THREAD so the 3D view keeps moving
+        while a prediction runs (up to ~20 s). The thread only writes plain
+        values into `job`; run() copies them to the screen, because VPython's
+        messages to the browser must only be sent from the main loop.
+        """
+        if self._job and not self._job["done"]:
+            return   # one at a time (they share NASA's download cache)
+        job = {"label": label, "progress": 0.0, "result": None, "error": None, "done": False}
+
+        def runner():
+            try:
+                job["result"] = work(job)
+            except Exception as exc:          # show the problem in the sidebar, don't crash
+                job["error"] = f"{type(exc).__name__}: {exc}"
+            job["done"] = True
+
+        self._job = job
+        threading.Thread(target=runner, daemon=True).start()
+
+    def _predict_event(self, _b):
+        import events
+        event = events.EVENTS[self.evt_index]
+
+        def work(job):
+            result = events.predict(event, self.start_date, progress=lambda f: job.update(progress=f))
+            return events.describe(result)
+        self._start_job(f"Predicting: {event['title']}...", work)
+
+    def _watch_event(self, _b):
+        import events
+        if self.rebuild is None:
+            self.evt_status.text = "<span class='ss-note'>Show me needs main.py's rebuild function.</span>"
+            return
+        event = events.EVENTS[self.evt_index]
+        load_date, t_load, t_play = events.watch_plan(event, self.start_date)
+
+        def work(job):
+            # NASA's positions for EVERY body on that day (downloaded the first
+            # time, then cached). Applied by run(), on the main thread.
+            self._pending_travel = (event, self.rebuild(load_date), t_load, t_play)
+            return None
+        self._start_job(f"Loading NASA's positions for {load_date} (first time: ~1 min)...", work)
+
+    def _travel(self, event, bodies, t_load, t_play):
+        """
+        TIME TRAVEL to just before the event (main thread only).
+        1. Put every body where NASA says it was at midnight that day.
+        2. Use 1-minute steps (events.FINE_STEP), so the asteroid or the
+           Moon moves smoothly instead of jumping 25 minutes per step.
+        3. Fast-forward to 3 hours before the event and play in slow motion.
+        """
+        import events
+        if self.lab.active:
+            self._reset_experiment(None)     # a time jump ends any experiment
+        self.sim.load_state(bodies, t_load)
+        self.sim.set_dt(events.FINE_STEP)
+        self.sim.step(max(0, int((t_play - self.sim.time) // self.sim.dt)))
+        t_event = events.seconds_between(self.start_date, event["time"])
+        self._fine_until = t_event + events.WATCH_LEAD
+        self.watching = (event, t_event)
+        self.time_debt = 0.0
+        self.days_per_second = events.WATCH_DAYS_PER_SECOND
+        self.speed_slider.value = math.log10(self.days_per_second)
+        self._update_speed_text()
+        if self.paused:
+            self._toggle_pause(self.pause_button)
+        if "Earth" in self.spheres:
+            self.follow_menu.index = 1 + list(self.spheres).index("Earth")
+            self.camera.follow(self.spheres["Earth"])
+            self.following = "Earth"
+        self.trails.clear()
+        self._redraw(0, force=True)
+
+    def _update_events(self):
+        """Each frame: show a job's progress/result, apply a time travel, end a watch."""
+        job = self._job
+        if job:
+            if job["error"]:
+                status = f"<span class='ss-note'>&#9888; {job['error']}</span>"
+            elif job["done"]:
+                status = job["result"] or "<span class='ss-note'>Arrived: watch the badge top-left.</span>"
+            else:
+                status = f"<span class='ss-note'>{job['label']} {100 * job['progress']:.0f}%</span>"
+            if status != self._last_evt_status:
+                self.evt_status.text = status
+                self._last_evt_status = status
+        if self._pending_travel is not None:
+            travel, self._pending_travel = self._pending_travel, None
+            self._travel(*travel)
+        # Back to normal time steps after the event, or as soon as the speed
+        # goes up (1-minute steps at 10 days/s would be 14,400 steps a second).
+        if self._fine_until is not None and (self.sim.time > self._fine_until or self.days_per_second > 0.2):
+            self.sim.set_dt(self._normal_dt)
+            self._fine_until = None
+            self.watching = None
 
     # ------------------------------------------------------- experiments
     def _choose_preset(self, m):
@@ -521,6 +662,12 @@ class SolarSystemView:
             last = f"<br>{self.lab.events[-1]}" if self.lab.events else ""
             text += (f"<div class='ss-exp-badge'>&#129514; EXPERIMENT, not real data: {self.lab.describe()}"
                      f" &nbsp;·&nbsp; day {self.lab.days():.0f}{last}</div>")
+        if self.watching:
+            import events
+            event, t_event = self.watching
+            line = events.live_readout(event, self.sim.names, self.sim.positions, self.sim.velocities,
+                                       t_event - self.sim.time)
+            text += f"<div class='ss-evt-badge'>&#128301; {event['title']}<br>{line}</div>"
             events = "".join(f"<br>&bull; {e}" for e in self.lab.events[-5:])
             status = f"<span class='ss-note'><b>Active:</b> {self.lab.describe()}{events}</span>"
         if text != self.hud.text:
@@ -545,7 +692,6 @@ class SolarSystemView:
         the same CPU, every frame then waited for a round trip, and the
         controls got slower, not faster.)
         """
-        dt = self.sim.dt
         last = time.perf_counter()
         while True:
             rate(60)  # at most 60 frames per second
@@ -558,6 +704,7 @@ class SolarSystemView:
                 # ...in whole physics steps. Any leftover carries to the next
                 # frame, so even very slow speeds (less than one step per frame)
                 # run at the correct average rate.
+                dt = self.sim.dt   # read every frame: "Show me" switches to 1-minute steps
                 n_steps = int(self.time_debt // dt)
                 self.time_debt -= n_steps * dt
                 if n_steps:
@@ -581,4 +728,5 @@ class SolarSystemView:
             self.trails.update_widths(self.camera.pos)
             if "Sun" in self.spheres:
                 self.swarms.update_size(self.camera.pos, self.spheres["Sun"].pos)
+            self._update_events()
             self._update_hud()

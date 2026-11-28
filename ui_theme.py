@@ -68,15 +68,26 @@ body { font-family: "Segoe UI", system-ui, sans-serif; color:#dfe6ee; }
 .ss-panel .ui-slider .ui-slider-handle { background:#4d8fe0; border:none; border-radius:50%;
                                          width:15px; height:15px; top:-5px; outline:none; }
 
-/* --- the Experimental simulation section (folds open when its title is clicked) --- */
-.ss-panel .ss-exp-h { color:#f0a23a; cursor:pointer; user-select:none; border-bottom-color:rgba(240,162,58,0.35); }
-.ss-panel .ss-exp-h::after { content:"  \\25B8"; }
-.ss-panel .ss-exp-h.open::after { content:"  \\25BE"; }
-.ss-panel .ss-exp { display:none; border-left:2px solid rgba(240,162,58,0.6); padding:4px 0 6px 10px;
-                    background:rgba(240,162,58,0.05); }
-.ss-panel .ss-exp.open { display:block; }
-.ss-hud .ss-exp-badge { margin-top:6px; padding:4px 9px; border-radius:6px; max-width:560px; font-size:12.5px;
-                        color:#1b1200; background:rgba(240,162,58,0.92); text-shadow:none; }
+/* --- the folding sections: Experimental simulation (orange) and Real events (teal) --- */
+.ss-panel .ss-exp-h, .ss-panel .ss-evt-h { cursor:pointer; user-select:none; }
+.ss-panel .ss-exp-h::after, .ss-panel .ss-evt-h::after { content:"  \\25B8"; }
+.ss-panel .ss-exp-h.open::after, .ss-panel .ss-evt-h.open::after { content:"  \\25BE"; }
+.ss-panel .ss-fold { display:none; padding:4px 0 6px 10px; }
+.ss-panel .ss-fold.open { display:block; }
+.ss-panel .ss-exp-h { color:#f0a23a; border-bottom-color:rgba(240,162,58,0.35); }
+.ss-panel .ss-exp { border-left:2px solid rgba(240,162,58,0.6); background:rgba(240,162,58,0.05); }
+.ss-panel .ss-evt-h { color:#4fd1c5; border-bottom-color:rgba(79,209,197,0.35); }
+.ss-panel .ss-evt { border-left:2px solid rgba(79,209,197,0.6); background:rgba(79,209,197,0.05); }
+.ss-panel .ss-evt select { width:100%; max-width:290px; }
+.ss-panel .ss-evt-table { border-collapse:collapse; margin:6px 0; font-size:12px; width:100%; }
+.ss-panel .ss-evt-table th, .ss-panel .ss-evt-table td { padding:2px 5px; text-align:left;
+                                    border-bottom:1px solid rgba(255,255,255,0.08); }
+.ss-panel .ss-evt-table th { color:#4fd1c5; font-weight:600; }
+.ss-panel .ss-evt-table a, .ss-panel .ss-note a { color:#4fd1c5; }
+.ss-hud .ss-exp-badge, .ss-hud .ss-evt-badge { margin-top:6px; padding:4px 9px; border-radius:6px; max-width:560px;
+                        font-size:12.5px; color:#1b1200; text-shadow:none; }
+.ss-hud .ss-exp-badge { background:rgba(240,162,58,0.92); }
+.ss-hud .ss-evt-badge { background:rgba(79,209,197,0.92); color:#001b18; }
 
 /* --- the open/close button --- */
 #ss-toggle { position:fixed; top:12px; right:14px; z-index:40; width:38px; height:38px;
@@ -161,23 +172,25 @@ JS = """
     var fsHolder = document.getElementById('ss-fullscreen-slot');
     if (fsHolder) fsHolder.appendChild(fsBtn);
 
-    // 2b. Fold everything between the experiment markers into one panel that
-    //     opens and closes when its orange title is clicked.
-    var expStart = document.getElementById('ss-exp-start');
-    var expEnd = document.getElementById('ss-exp-end');
-    if (expStart && expEnd) {
+    // 2b. Fold the sections between marker spans (ss-<name>-start .. ss-<name>-end)
+    //     into one panel that opens and closes when its coloured title is
+    //     clicked: the Experimental simulation (exp) and Real events (evt) tabs.
+    ['exp', 'evt'].forEach(function (name) {
+      var start = document.getElementById('ss-' + name + '-start');
+      var end = document.getElementById('ss-' + name + '-end');
+      if (!start || !end) return;
       var box = document.createElement('div');
-      box.className = 'ss-exp';
-      expStart.parentNode.insertBefore(box, expStart);
-      var node = expStart.nextSibling;
-      while (node && node !== expEnd) { var next = node.nextSibling; box.appendChild(node); node = next; }
+      box.className = 'ss-fold ss-' + name;
+      start.parentNode.insertBefore(box, start);
+      var node = start.nextSibling;
+      while (node && node !== end) { var next = node.nextSibling; box.appendChild(node); node = next; }
       var title = box.previousElementSibling;
-      if (title && title.classList.contains('ss-exp-h')) {
+      if (title && title.classList.contains('ss-' + name + '-h')) {
         title.addEventListener('click', function () {
           box.classList.toggle('open'); title.classList.toggle('open');
         });
       }
-    }
+    });
 
     // 3. Keyboard: H toggles the panel, Esc closes it, keys never scroll the page
     var noScroll = [' ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown'];

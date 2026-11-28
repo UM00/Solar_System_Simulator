@@ -99,6 +99,31 @@ class Simulation:
     def index(self, name):
         return self.names.index(name)
 
+    def set_dt(self, dt):
+        """Change the time step mid-run (e.g. finer steps during a close flyby).
+        The slow lane keeps how far behind it is, in seconds."""
+        lag = self.slow_lag
+        self.dt = float(dt)
+        self.slow_every = max(1, round(SLOW_LANE_STEP / self.dt))
+        self._fast_steps_done = min(round(lag / self.dt), self.slow_every - 1)
+        self.slow_lag = self._fast_steps_done * self.dt
+
+    def load_state(self, bodies, time):
+        """
+        "Time travel": replace every position and velocity with those of
+        `bodies` (the SAME bodies in the same order, e.g. rebuilt from NASA
+        data for another date) and set the clock to `time` seconds.
+        """
+        if [b.name for b in bodies] != self.names:
+            raise ValueError("load_state needs exactly the same bodies, in the same order")
+        self.positions = np.array([b.position for b in bodies], dtype=float)
+        self.velocities = np.array([b.velocity for b in bodies], dtype=float)
+        self.alive[:] = True
+        self.time = float(time)
+        self._fast_steps_done = 0
+        self.slow_lag = 0.0
+        self.move_to_center_of_mass()   # same convention as at start-up (see below)
+
     def move_to_center_of_mass(self):
         """
         Shift positions and velocities so the balance point of OUR bodies
